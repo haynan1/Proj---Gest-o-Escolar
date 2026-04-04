@@ -7,7 +7,7 @@ def criar_professor(escola_id, nome, disciplina_id, max_aulas_semana, dias_dispo
         dias_str = ','.join(dias_disponiveis) if isinstance(dias_disponiveis, list) else dias_disponiveis
         conn.execute(
             """INSERT INTO professores (escola_id, nome, disciplina_id, max_aulas_semana, dias_disponiveis)
-               VALUES (?, ?, ?, ?, ?)""",
+               VALUES (%s, %s, %s, %s, %s)""",
             (escola_id, nome, disciplina_id, max_aulas_semana, dias_str)
         )
         conn.commit()
@@ -24,7 +24,7 @@ def listar_professores(escola_id):
         """SELECT p.*, d.nome AS disciplina_nome, d.cor AS disciplina_cor
            FROM professores p
            JOIN disciplinas d ON p.disciplina_id = d.id
-           WHERE p.escola_id = ?
+           WHERE p.escola_id = %s
            ORDER BY p.nome""",
         (escola_id,)
     ).fetchall()
@@ -43,7 +43,7 @@ def buscar_professor(professor_id):
         """SELECT p.*, d.nome AS disciplina_nome
            FROM professores p
            JOIN disciplinas d ON p.disciplina_id = d.id
-           WHERE p.id = ?""",
+           WHERE p.id = %s""",
         (professor_id,)
     ).fetchone()
     conn.close()
@@ -58,8 +58,8 @@ def atualizar_professor(professor_id, nome, disciplina_id, max_aulas_semana, dia
     conn = get_connection()
     dias_str = ','.join(dias_disponiveis) if isinstance(dias_disponiveis, list) else dias_disponiveis
     conn.execute(
-        """UPDATE professores SET nome = ?, disciplina_id = ?, max_aulas_semana = ?, dias_disponiveis = ?
-           WHERE id = ?""",
+        """UPDATE professores SET nome = %s, disciplina_id = %s, max_aulas_semana = %s, dias_disponiveis = %s
+           WHERE id = %s""",
         (nome, disciplina_id, max_aulas_semana, dias_str, professor_id)
     )
     conn.commit()
@@ -68,6 +68,6 @@ def atualizar_professor(professor_id, nome, disciplina_id, max_aulas_semana, dia
 
 def deletar_professor(professor_id):
     conn = get_connection()
-    conn.execute("DELETE FROM professores WHERE id = ?", (professor_id,))
+    conn.execute("DELETE FROM professores WHERE id = %s", (professor_id,))
     conn.commit()
     conn.close()

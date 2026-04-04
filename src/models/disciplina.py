@@ -5,7 +5,7 @@ def criar_disciplina(escola_id, nome, cor):
     conn = get_connection()
     try:
         conn.execute(
-            "INSERT INTO disciplinas (escola_id, nome, cor) VALUES (?, ?, ?)",
+            "INSERT INTO disciplinas (escola_id, nome, cor) VALUES (%s, %s, %s)",
             (escola_id, nome, cor)
         )
         conn.commit()
@@ -19,7 +19,7 @@ def criar_disciplina(escola_id, nome, cor):
 def listar_disciplinas(escola_id):
     conn = get_connection()
     rows = conn.execute(
-        "SELECT * FROM disciplinas WHERE escola_id = ? ORDER BY nome", (escola_id,)
+        "SELECT * FROM disciplinas WHERE escola_id = %s ORDER BY nome", (escola_id,)
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -27,7 +27,7 @@ def listar_disciplinas(escola_id):
 
 def buscar_disciplina(disciplina_id):
     conn = get_connection()
-    row = conn.execute("SELECT * FROM disciplinas WHERE id = ?", (disciplina_id,)).fetchone()
+    row = conn.execute("SELECT * FROM disciplinas WHERE id = %s", (disciplina_id,)).fetchone()
     conn.close()
     return dict(row) if row else None
 
@@ -35,7 +35,7 @@ def buscar_disciplina(disciplina_id):
 def atualizar_disciplina(disciplina_id, nome, cor):
     conn = get_connection()
     conn.execute(
-        "UPDATE disciplinas SET nome = ?, cor = ? WHERE id = ?",
+        "UPDATE disciplinas SET nome = %s, cor = %s WHERE id = %s",
         (nome, cor, disciplina_id)
     )
     conn.commit()
@@ -44,6 +44,6 @@ def atualizar_disciplina(disciplina_id, nome, cor):
 
 def deletar_disciplina(disciplina_id):
     conn = get_connection()
-    conn.execute("DELETE FROM disciplinas WHERE id = ?", (disciplina_id,))
+    conn.execute("DELETE FROM disciplinas WHERE id = %s", (disciplina_id,))
     conn.commit()
     conn.close()

@@ -1,28 +1,47 @@
-import sys
 import os
+import sys
+
+SRC_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SRC_DIR)
 
 # Garante que o diretório src está no path
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, SRC_DIR)
 
 from flask import Flask
+from dotenv import load_dotenv
 from database.schema import create_tables
 from routes.escola_routes import escola_bp
 from routes.dashboard_routes import dashboard_bp
 
-app = Flask(__name__,
-            template_folder='templates',
-            static_folder='static')
+load_dotenv(os.path.join(PROJECT_ROOT, '.env'))
 
-app.secret_key = 'horario_escolar_secret_2024'
+
+def _get_bool_env(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+app = Flask(
+    __name__,
+    template_folder='templates',
+    static_folder='static',
+)
+app.secret_key = os.getenv('FLASK_SECRET_KEY', 'dev-secret-change-me')
 
 # Registra blueprints
 app.register_blueprint(escola_bp)
 app.register_blueprint(dashboard_bp)
 
+
 if __name__ == '__main__':
+    port = int(os.getenv('PORT', '5000'))
+    debug = _get_bool_env('FLASK_DEBUG', default=True)
+
     create_tables()
     print("=" * 50)
     print("  Sistema de Horários Escolares")
-    print("  Acesse: http://localhost:5000")
+    print(f"  Acesse: http://localhost:{port}")
     print("=" * 50)
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=debug, host='0.0.0.0', port=port)

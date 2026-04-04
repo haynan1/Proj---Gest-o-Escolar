@@ -5,7 +5,7 @@ def criar_turma(escola_id, nome):
     conn = get_connection()
     try:
         conn.execute(
-            "INSERT INTO turmas (escola_id, nome) VALUES (?, ?)",
+            "INSERT INTO turmas (escola_id, nome) VALUES (%s, %s)",
             (escola_id, nome)
         )
         conn.commit()
@@ -19,7 +19,7 @@ def criar_turma(escola_id, nome):
 def listar_turmas(escola_id):
     conn = get_connection()
     rows = conn.execute(
-        "SELECT * FROM turmas WHERE escola_id = ? ORDER BY nome", (escola_id,)
+        "SELECT * FROM turmas WHERE escola_id = %s ORDER BY nome", (escola_id,)
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -27,20 +27,20 @@ def listar_turmas(escola_id):
 
 def buscar_turma(turma_id):
     conn = get_connection()
-    row = conn.execute("SELECT * FROM turmas WHERE id = ?", (turma_id,)).fetchone()
+    row = conn.execute("SELECT * FROM turmas WHERE id = %s", (turma_id,)).fetchone()
     conn.close()
     return dict(row) if row else None
 
 
 def atualizar_turma(turma_id, nome):
     conn = get_connection()
-    conn.execute("UPDATE turmas SET nome = ? WHERE id = ?", (nome, turma_id))
+    conn.execute("UPDATE turmas SET nome = %s WHERE id = %s", (nome, turma_id))
     conn.commit()
     conn.close()
 
 
 def deletar_turma(turma_id):
     conn = get_connection()
-    conn.execute("DELETE FROM turmas WHERE id = ?", (turma_id,))
+    conn.execute("DELETE FROM turmas WHERE id = %s", (turma_id,))
     conn.commit()
     conn.close()
