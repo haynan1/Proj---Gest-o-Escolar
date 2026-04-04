@@ -4,6 +4,7 @@
 
 let draggedCard = null;
 let draggedAulaId = null;
+const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
 
 async function destacarConflitos(profId) {
     if (!profId) return;
@@ -121,7 +122,10 @@ function initDragDrop() {
                 const escolaId = document.body.dataset.escolaId;
                 const resp = await fetch(`/escola/${escolaId}/mover_aula`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': csrfToken,
+                    },
                     body: JSON.stringify({ aula_id: parseInt(aulaId), dia: novoDia, periodo: parseInt(novoPeriodo) })
                 });
 
