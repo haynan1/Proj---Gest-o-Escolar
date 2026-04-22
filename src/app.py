@@ -1,5 +1,6 @@
 import os
 import sys
+from urllib.parse import urlsplit
 
 SRC_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SRC_DIR)
@@ -38,7 +39,16 @@ app.config.update(
     REMEMBER_COOKIE_SECURE=_get_bool_env('SESSION_COOKIE_SECURE', default=False),
     VERIFY_EMAIL_TOKEN_MAX_AGE=int(os.getenv('VERIFY_EMAIL_TOKEN_MAX_AGE', str(60 * 60 * 24))),
     RESET_PASSWORD_TOKEN_MAX_AGE=int(os.getenv('RESET_PASSWORD_TOKEN_MAX_AGE', str(60 * 60))),
+    APP_BASE_URL=os.getenv('APP_BASE_URL', '').strip(),
 )
+
+app_base_url = app.config.get('APP_BASE_URL', '')
+if app_base_url:
+    parsed_base_url = urlsplit(app_base_url)
+    if parsed_base_url.scheme and parsed_base_url.netloc:
+        app.config['PREFERRED_URL_SCHEME'] = parsed_base_url.scheme
+        app.config['SERVER_NAME'] = parsed_base_url.netloc
+
 app.before_request(csrf_protect)
 
 # Registra blueprints
