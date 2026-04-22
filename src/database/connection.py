@@ -7,6 +7,7 @@ import mysql.connector
 from dotenv import load_dotenv
 from mysql.connector import Error
 from mysql.connector.connection import MySQLConnection
+from mysql.connector.errorcode import ER_BAD_DB_ERROR
 
 
 LOGGER = logging.getLogger(__name__)
@@ -16,11 +17,7 @@ DEFAULT_DB_PORT = 3306
 
 
 def _load_environment() -> None:
-    """Load environment variables from .env when present.
-
-    In production, system environment variables continue to work even if the
-    file does not exist.
-    """
+    """Load environment variables from .env when present."""
     env_path = PROJECT_ROOT / '.env'
     load_dotenv(env_path, override=False)
 
@@ -29,8 +26,8 @@ def _get_required_env(name: str) -> str:
     value = os.getenv(name)
     if value is None or not value.strip():
         raise RuntimeError(
-            "Variáveis de ambiente ausentes para conexão com o banco: "
-            f"{name}. Configure o arquivo .env ou as variáveis do sistema."
+            "Variaveis de ambiente ausentes para conexao com o banco: "
+            f"{name}. Configure o arquivo .env ou as variaveis do sistema."
         )
     return value.strip()
 
@@ -48,7 +45,7 @@ def _get_database_config() -> dict[str, Any]:
         port = int(port_raw)
     except ValueError as exc:
         raise RuntimeError(
-            "Valor inválido para DB_PORT. Informe uma porta numérica válida."
+            "Valor invalido para DB_PORT. Informe uma porta numerica valida."
         ) from exc
 
     return {
@@ -61,6 +58,28 @@ def _get_database_config() -> dict[str, Any]:
         'use_unicode': True,
         'autocommit': False,
     }
+
+
+def _server_connection_config(config: dict[str, Any]) -> dict[str, Any]:
+    server_config = config.copy()
+    server_config.pop('database', None)
+    return server_config
+
+
+def _create_database_if_missing(config: dict[str, Any]) -> None:
+    connection = mysql.connector.connect(**_server_connection_config(config))
+    cursor = connection.cursor()
+    database_name = config['database']
+
+    try:
+        cursor.execute(
+            f"CREATE DATABASE IF NOT EXISTS `{database_name}` "
+            "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+        )
+        connection.commit()
+    finally:
+        cursor.close()
+        connection.close()
 
 
 class DatabaseConnection:
@@ -98,7 +117,22 @@ def get_connection() -> DatabaseConnection:
         connection = mysql.connector.connect(**config)
         return DatabaseConnection(connection)
     except Error as exc:
+        if exc.errno == ER_BAD_DB_ERROR:
+            LOGGER.warning(
+                "Schema '%s' nao existe. Criando automaticamente.",
+                config['database'],
+            )
+            try:
+                _create_database_if_missing(config)
+                connection = mysql.connector.connect(**config)
+                return DatabaseConnection(connection)
+            except Error as create_exc:
+                raise RuntimeError(
+                    "Nao foi possivel criar o banco MySQL/MariaDB automaticamente. "
+                    "Verifique as permissoes do usuario configurado."
+                ) from create_exc
+
         raise RuntimeError(
             "Erro ao conectar no banco MySQL/MariaDB. "
-            "Verifique host, porta, usuário, senha e nome do banco."
+            "Verifique host, porta, usuario, senha e nome do banco."
         ) from exc
