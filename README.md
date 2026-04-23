@@ -1,6 +1,6 @@
-# Projeto Gestao Escolar
+# Projeto Planax
 
-Aplicacao Flask para gerenciamento de escolas, turmas, disciplinas, professores e geracao de horarios.
+Aplicacao Flask do Planax para gerenciamento de escolas, turmas, disciplinas, professores e geracao de horarios.
 
 ## O que o projeto faz
 
@@ -211,6 +211,16 @@ APP_BASE_URL=https://app.seudominio.com
 - `src/routes/auth_routes.py`: login, cadastro, verificacao e recuperacao de senha
 - `src/routes/admin_routes.py`: gestao de usuarios e vinculos
 - `src/email_service.py`: envio de e-mails
+
+## Favicon
+
+Para usar o icone do site, coloque a imagem em:
+
+- `src/static/favicon/favicon.png`
+
+Opcionalmente, se voce tiver um `.ico`, pode colocar tambem em:
+
+- `src/static/favicon/favicon.ico`
 
 ## GitHub
 

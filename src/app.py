@@ -8,7 +8,7 @@ PROJECT_ROOT = os.path.dirname(SRC_DIR)
 # Garante que o diretório src está no path
 sys.path.insert(0, SRC_DIR)
 
-from flask import Flask
+from flask import Flask, send_from_directory
 from dotenv import load_dotenv
 from auth import csrf_protect
 from database.schema import create_tables
@@ -51,6 +51,15 @@ if app_base_url:
         app.config['SERVER_NAME'] = parsed_base_url.netloc
 
 app.before_request(csrf_protect)
+
+
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(
+        os.path.join(app.static_folder, 'favicon'),
+        'imagem.ico',
+        mimetype='image/vnd.microsoft.icon',
+    )
 
 # Registra blueprints
 app.register_blueprint(auth_bp)
