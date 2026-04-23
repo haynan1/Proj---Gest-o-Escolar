@@ -1,5 +1,5 @@
 /**
- * Lógica do Dashboard EduSchedule
+ * Lógica do Dashboard Planax
  * Separada do HTML para evitar conflitos de sintaxe no editor
  */
 

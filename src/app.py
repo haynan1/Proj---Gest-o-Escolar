@@ -65,7 +65,7 @@ if __name__ == '__main__':
     debug = _get_bool_env('FLASK_DEBUG', default=True)
 
     print("=" * 50)
-    print("  Sistema de Horários Escolares")
+    print("  Planax")
     print(f"  Acesse: http://localhost:{port}")
     print("=" * 50)
     app.run(debug=debug, host='0.0.0.0', port=port)

@@ -79,7 +79,11 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.1rem;
+    font-size: 1rem;
+    font-weight: 800;
+    letter-spacing: -0.06em;
+    color: #f8fafc;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
 .navbar-links {
@@ -468,6 +472,60 @@ body {
 /* ─── Tables ────────────────────────────────────────────────────────────────── */
 .table-wrap {
     overflow-x: auto;
+}
+
+.admin-user-actions {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    min-width: 320px;
+}
+
+.admin-user-cell,
+.admin-col-actions {
+    width: 320px;
+    min-width: 320px;
+    white-space: normal;
+}
+
+.admin-user-form {
+    display: inline-grid;
+    grid-template-columns: minmax(160px, 1fr) auto;
+    gap: 0.55rem;
+    width: auto;
+    align-items: center;
+}
+
+.admin-users-table .admin-col-name {
+    width: 22%;
+}
+
+.admin-users-table .admin-col-email {
+    width: 33%;
+}
+
+.admin-users-table .admin-col-role {
+    width: 15%;
+}
+
+.admin-users-table .admin-col-status,
+.admin-users-table .admin-col-login {
+    width: 12%;
+}
+
+.admin-master-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.45rem 0.9rem;
+    border-radius: 999px;
+    background: rgba(34, 197, 94, 0.14);
+    border: 1px solid rgba(34, 197, 94, 0.28);
+    color: var(--green-light);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
 }
 
 table {

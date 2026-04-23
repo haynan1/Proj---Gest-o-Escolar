@@ -22,36 +22,54 @@
                 <div class="card-title">Usuarios</div>
             </div>
             <div class="table-wrap">
-                <table>
+                <table class="admin-users-table">
                     <thead>
                         <tr>
-                            <th>Nome</th>
-                            <th>E-mail</th>
-                            <th>Perfil</th>
-                            <th>Status</th>
-                            <th>Ajustar</th>
+                            <th class="admin-col-name">Nome</th>
+                            <th class="admin-col-email">E-mail</th>
+                            <th class="admin-col-role">Perfil</th>
+                            <th class="admin-col-status">Status</th>
+                            <th class="admin-col-login">Ultimo login</th>
+                            <th class="admin-col-actions">Ajustar</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for usuario in usuarios %}
+                        {% set is_master = usuario.email == master_user_email %}
                         <tr>
                             <td>{{ usuario.nome }}</td>
                             <td>{{ usuario.email }}</td>
                             <td>{{ role_label(usuario.role) }}</td>
                             <td>{{ 'Verificado' if usuario.email_verificado else 'Pendente' }}</td>
-                            <td>
-                                <form method="POST" action="{{ url_for('admin.atualizar_perfil', usuario_id=usuario.id) }}"
-                                    class="flex gap-2">
-                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                                    <select name="role" class="form-control">
-                                        {% for role in role_options %}
-                                        <option value="{{ role }}" {% if role == usuario.role %}selected{% endif %}>
-                                            {{ role_label(role) }}
-                                        </option>
-                                        {% endfor %}
-                                    </select>
-                                    <button type="submit" class="btn btn-secondary btn-sm">Salvar</button>
-                                </form>
+                            <td>{{ usuario.ultimo_login_label }}</td>
+                            <td class="admin-user-cell">
+                                <div class="admin-user-actions">
+                                    {% if is_master %}
+                                    <span class="admin-master-badge">Master</span>
+                                    {% else %}
+                                    <form method="POST"
+                                        action="{{ url_for('admin.atualizar_perfil', usuario_id=usuario.id) }}"
+                                        class="admin-user-form">
+                                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                        <select name="role" class="form-control">
+                                            {% for role in role_options %}
+                                            <option value="{{ role }}" {% if role == usuario.role %}selected{% endif %}>
+                                                {{ role_label(role) }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                        <button type="submit" class="btn btn-secondary btn-sm">Salvar</button>
+                                    </form>
+                                    {% if current_user.id != usuario.id %}
+                                    <form method="POST"
+                                        action="{{ url_for('admin.deletar_usuario_route', usuario_id=usuario.id) }}"
+                                        onsubmit="return confirm('Excluir o usuario {{ usuario.nome }}? Essa acao nao pode ser desfeita.')">
+                                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-danger btn-sm">Excluir</button>
+                                    </form>
+                                    {% endif %}
+                                    {% endif %}
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -71,7 +89,9 @@
                     <select name="usuario_id" class="form-control" required>
                         <option value="">Selecione...</option>
                         {% for usuario in usuarios %}
+                        {% if usuario.email != master_user_email %}
                         <option value="{{ usuario.id }}">{{ usuario.nome }} - {{ role_label(usuario.role) }}</option>
+                        {% endif %}
                         {% endfor %}
                     </select>
                 </div>
@@ -102,17 +122,22 @@
                     </thead>
                     <tbody>
                         {% for vinculo in vinculos %}
+                        {% set is_master_vinculo = vinculo.usuario_email == master_user_email %}
                         <tr>
                             <td>{{ vinculo.usuario_nome }}</td>
                             <td>{{ role_label(vinculo.usuario_role) }}</td>
                             <td>{{ vinculo.escola_nome }}</td>
                             <td>
+                                {% if is_master_vinculo %}
+                                <span class="admin-master-badge">Master</span>
+                                {% else %}
                                 <form method="POST"
                                     action="{{ url_for('admin.deletar_vinculo_route', vinculo_id=vinculo.id) }}"
                                     onsubmit="return confirm('Remover o vinculo deste usuario com a escola?')">
                                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                                     <button type="submit" class="btn btn-danger btn-sm">Remover</button>
                                 </form>
+                                {% endif %}
                             </td>
                         </tr>
                         {% else %}

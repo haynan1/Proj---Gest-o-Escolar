@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import os
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -51,6 +52,19 @@ def buscar_usuario_por_email(email: str):
         conn.close()
 
 
+def get_master_user_email() -> str:
+    return os.getenv('AUTH_BOOTSTRAP_ADMIN_EMAIL', '').strip().lower()
+
+
+def is_master_user(user: dict | None) -> bool:
+    if not user:
+        return False
+    master_email = get_master_user_email()
+    if not master_email:
+        return False
+    return user.get('email', '').strip().lower() == master_email
+
+
 def buscar_usuario_por_id(usuario_id: int):
     conn = get_connection()
     try:
@@ -72,6 +86,18 @@ def listar_usuarios():
                ORDER BY nome, email"""
         ).fetchall()
         return [_serialize_user(row) for row in rows]
+    finally:
+        conn.close()
+
+
+def deletar_usuario(usuario_id: int):
+    conn = get_connection()
+    try:
+        conn.execute(
+            "DELETE FROM usuarios WHERE id = %s",
+            (usuario_id,),
+        )
+        conn.commit()
     finally:
         conn.close()
 
@@ -216,4 +242,28 @@ def _serialize_user(row):
 
     user = dict(row)
     user['role'] = normalize_role(user.get('role'))
+    user['dias_desde_ultimo_login'] = _calculate_days_since_last_login(user.get('ultimo_login_em'))
+    user['ultimo_login_label'] = _format_last_login_label(user['dias_desde_ultimo_login'])
     return user
+
+
+def _calculate_days_since_last_login(last_login):
+    if not last_login:
+        return None
+
+    now = datetime.utcnow()
+    if hasattr(last_login, 'tzinfo') and last_login.tzinfo is not None:
+        last_login = last_login.replace(tzinfo=None)
+
+    delta = now - last_login
+    return max(delta.days, 0)
+
+
+def _format_last_login_label(days_since_last_login):
+    if days_since_last_login is None:
+        return 'Nunca'
+    if days_since_last_login == 0:
+        return 'Hoje'
+    if days_since_last_login == 1:
+        return '1 dia'
+    return f'{days_since_last_login} dias'

@@ -5,7 +5,14 @@ from flask import Blueprint, flash, g, redirect, render_template, request, url_f
 from access_control import ROLE_ADMIN, ROLE_COORDINATOR, ROLE_STAFF, require_permission
 from auth import login_required
 from models.escola import listar_escolas
-from models.user import atualizar_role_usuario, criar_usuario, listar_usuarios
+from models.user import (
+    atualizar_role_usuario,
+    buscar_usuario_por_id,
+    criar_usuario,
+    deletar_usuario,
+    is_master_user,
+    listar_usuarios,
+)
 from models.user_link import criar_vinculo_usuario_escola, deletar_vinculo, listar_vinculos
 
 
@@ -19,12 +26,14 @@ admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 @login_required
 @require_permission('manage_users')
 def usuarios():
+    usuarios = listar_usuarios()
     return render_template(
         'admin_users.html',
-        usuarios=listar_usuarios(),
+        usuarios=usuarios,
         escolas=listar_escolas(),
         vinculos=listar_vinculos(),
         role_options=MANAGED_ROLE_OPTIONS,
+        master_user_email=next((usuario['email'] for usuario in usuarios if is_master_user(usuario)), ''),
     )
 
 
@@ -60,6 +69,11 @@ def criar_usuario_route():
 @login_required
 @require_permission('manage_users')
 def atualizar_perfil(usuario_id):
+    usuario = buscar_usuario_por_id(usuario_id)
+    if is_master_user(usuario):
+        flash('O usuario master sempre permanece com controle total e nao pode ter o perfil alterado.', 'error')
+        return redirect(url_for('admin.usuarios'))
+
     role = request.form.get('role', '').strip().lower()
     if usuario_id == g.user['id'] and role != ROLE_ADMIN:
         flash('O administrador logado nao pode remover o proprio acesso administrativo aqui.', 'error')
@@ -73,6 +87,24 @@ def atualizar_perfil(usuario_id):
     return redirect(url_for('admin.usuarios'))
 
 
+@admin_bp.route('/usuarios/<int:usuario_id>/deletar', methods=['POST'])
+@login_required
+@require_permission('manage_users')
+def deletar_usuario_route(usuario_id):
+    usuario = buscar_usuario_por_id(usuario_id)
+    if is_master_user(usuario):
+        flash('O usuario master nao pode ser excluido.', 'error')
+        return redirect(url_for('admin.usuarios'))
+
+    if usuario_id == g.user['id']:
+        flash('Voce nao pode excluir o usuario que esta logado.', 'error')
+        return redirect(url_for('admin.usuarios'))
+
+    deletar_usuario(usuario_id)
+    flash('Usuario removido com sucesso.', 'success')
+    return redirect(url_for('admin.usuarios'))
+
+
 @admin_bp.route('/vinculos/criar', methods=['POST'])
 @login_required
 @require_permission('manage_links')
@@ -81,6 +113,8 @@ def criar_vinculo():
     escola_id = request.form.get('escola_id', type=int)
     if not usuario_id or not escola_id:
         flash('Selecione usuario e escola para criar o vinculo.', 'error')
+    elif is_master_user(buscar_usuario_por_id(usuario_id)):
+        flash('O usuario master nao precisa de ajustes de vinculo pela interface.', 'error')
     else:
         sucesso, mensagem = criar_vinculo_usuario_escola(usuario_id, escola_id)
         flash(mensagem, 'success' if sucesso else 'error')
@@ -91,6 +125,10 @@ def criar_vinculo():
 @login_required
 @require_permission('manage_links')
 def deletar_vinculo_route(vinculo_id):
-    deletar_vinculo(vinculo_id)
-    flash('Vinculo removido com sucesso.', 'success')
+    vinculo = next((item for item in listar_vinculos() if item['id'] == vinculo_id), None)
+    if vinculo and is_master_user({'email': vinculo.get('usuario_email')}):
+        flash('O vinculo do usuario master nao pode ser alterado por esta tela.', 'error')
+    else:
+        deletar_vinculo(vinculo_id)
+        flash('Vinculo removido com sucesso.', 'success')
     return redirect(url_for('admin.usuarios'))
