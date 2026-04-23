@@ -2,14 +2,16 @@ from datetime import datetime, timedelta
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from access_control import ROLE_ADMIN, ROLE_COORDINATOR, ROLE_STAFF, normalize_role
 from database.connection import get_connection
 
 
 MAX_LOGIN_ATTEMPTS = 5
 LOCK_MINUTES = 15
+MANAGED_ROLES = {ROLE_ADMIN, ROLE_COORDINATOR, ROLE_STAFF}
 
 
-def criar_usuario(nome: str, email: str, senha: str):
+def criar_usuario(nome: str, email: str, senha: str, role: str = ROLE_STAFF, email_verificado: bool = False):
     conn = get_connection()
     try:
         senha_hash = generate_password_hash(senha)
@@ -18,19 +20,20 @@ def criar_usuario(nome: str, email: str, senha: str):
                    nome,
                    email,
                    senha_hash,
+                   role,
                    email_verificado,
                    tentativas_login_falhas,
                    token_version
-               ) VALUES (%s, %s, %s, %s, %s, %s)""",
-            (nome, email.lower(), senha_hash, False, 0, 0),
+               ) VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+            (nome, email.lower(), senha_hash, normalize_role(role), bool(email_verificado), 0, 0),
         )
         conn.commit()
-        return True, 'Usuário criado com sucesso.'
+        return True, 'Usuario criado com sucesso.'
     except Exception as exc:
         conn.rollback()
         mensagem = str(exc)
         if 'Duplicate entry' in mensagem and 'usuarios.email' in mensagem:
-            return False, 'Já existe um usuário cadastrado com este e-mail.'
+            return False, 'Ja existe um usuario cadastrado com este e-mail.'
         return False, mensagem
     finally:
         conn.close()
@@ -43,7 +46,7 @@ def buscar_usuario_por_email(email: str):
             "SELECT * FROM usuarios WHERE email = %s",
             (email.lower(),),
         ).fetchone()
-        return dict(row) if row else None
+        return _serialize_user(row)
     finally:
         conn.close()
 
@@ -55,7 +58,36 @@ def buscar_usuario_por_id(usuario_id: int):
             "SELECT * FROM usuarios WHERE id = %s",
             (usuario_id,),
         ).fetchone()
-        return dict(row) if row else None
+        return _serialize_user(row)
+    finally:
+        conn.close()
+
+
+def listar_usuarios():
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            """SELECT id, nome, email, role, email_verificado, ultimo_login_em, criado_em
+               FROM usuarios
+               ORDER BY nome, email"""
+        ).fetchall()
+        return [_serialize_user(row) for row in rows]
+    finally:
+        conn.close()
+
+
+def atualizar_role_usuario(usuario_id: int, role: str):
+    role = normalize_role(role)
+    if role not in MANAGED_ROLES:
+        raise ValueError('Perfil de usuario invalido.')
+
+    conn = get_connection()
+    try:
+        conn.execute(
+            "UPDATE usuarios SET role = %s WHERE id = %s",
+            (role, usuario_id),
+        )
+        conn.commit()
     finally:
         conn.close()
 
@@ -176,3 +208,12 @@ def atualizar_senha(usuario_id: int, nova_senha: str, validar_email: bool = True
         conn.commit()
     finally:
         conn.close()
+
+
+def _serialize_user(row):
+    if not row:
+        return None
+
+    user = dict(row)
+    user['role'] = normalize_role(user.get('role'))
+    return user

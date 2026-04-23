@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{% block title %}Horários Escolares{% endblock %}</title>
+    <title>{% block title %}Horarios Escolares{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
     <meta name="csrf-token" content="{{ csrf_token() }}" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -14,17 +14,26 @@
 </head>
 
 <body {% block body_attrs %}{% endblock %}>
-
-    <!-- Navbar -->
     <nav class="navbar">
         <a href="{{ url_for('escola.home' if current_user else 'auth.login') }}" class="navbar-brand">
-            <div class="logo-icon">📅</div>
+            <div class="logo-icon">ED</div>
             <span>EduSchedule</span>
         </a>
         <div class="navbar-links">
             {% block nav_links %}{% endblock %}
+            {% if current_user and has_permission('manage_users') %}
+            <a href="{{ url_for('admin.usuarios') }}"
+                class="{% if request.endpoint and request.endpoint.startswith('admin.') %}active{% endif %}">
+                Usuarios
+            </a>
+            {% endif %}
             {% if current_user %}
-            <span class="navbar-user">{{ current_user.nome }}</span>
+            <span class="navbar-user">
+                {{ current_user.nome }}
+                {% if current_user.nome|lower != role_label()|lower %}
+                <span class="navbar-user-role">{{ role_label() }}</span>
+                {% endif %}
+            </span>
             <form method="POST" action="{{ url_for('auth.logout') }}" class="navbar-logout-form">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-secondary btn-sm">Sair</button>
@@ -33,19 +42,17 @@
         </div>
     </nav>
 
-    <!-- Flash Messages -->
     <div class="container" style="padding-top:1rem; padding-bottom:0;">
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% for category, message in messages %}
         <div class="alert alert-{{ category }}">
-            {% if category == 'success' %}✓{% else %}⚠{% endif %}
+            {% if category == 'success' %}+{% else %}!{% endif %}
             {{ message }}
         </div>
         {% endfor %}
         {% endwith %}
     </div>
 
-    <!-- Main Content -->
     {% block content %}{% endblock %}
 
     <script src="{{ url_for('static', filename='cores.js') }}"></script>

@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}Usuarios e Vinculos{% endblock %}
+
+{% block nav_links %}
+<a href="{{ url_for('escola.home') }}">Inicio</a>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="flex items-center justify-between mb-3 mt-2">
+        <div>
+            <h1 class="dashboard-header-title">Usuarios e vinculos</h1>
+            <p class="text-muted text-sm mt-1">Gerencie perfis globais e acesso por escola.</p>
+        </div>
+        <button class="btn btn-primary" onclick="openModal('modal-usuario')">+ Novo Usuario</button>
+    </div>
+
+    <div class="dashboard-grid">
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">Usuarios</div>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>E-mail</th>
+                            <th>Perfil</th>
+                            <th>Status</th>
+                            <th>Ajustar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for usuario in usuarios %}
+                        <tr>
+                            <td>{{ usuario.nome }}</td>
+                            <td>{{ usuario.email }}</td>
+                            <td>{{ role_label(usuario.role) }}</td>
+                            <td>{{ 'Verificado' if usuario.email_verificado else 'Pendente' }}</td>
+                            <td>
+                                <form method="POST" action="{{ url_for('admin.atualizar_perfil', usuario_id=usuario.id) }}"
+                                    class="flex gap-2">
+                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                    <select name="role" class="form-control">
+                                        {% for role in role_options %}
+                                        <option value="{{ role }}" {% if role == usuario.role %}selected{% endif %}>
+                                            {{ role_label(role) }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="submit" class="btn btn-secondary btn-sm">Salvar</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">Criar vinculo</div>
+            </div>
+            <form method="POST" action="{{ url_for('admin.criar_vinculo') }}">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group">
+                    <label class="form-label">Usuario</label>
+                    <select name="usuario_id" class="form-control" required>
+                        <option value="">Selecione...</option>
+                        {% for usuario in usuarios %}
+                        <option value="{{ usuario.id }}">{{ usuario.nome }} - {{ role_label(usuario.role) }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Escola</label>
+                    <select name="escola_id" class="form-control" required>
+                        <option value="">Selecione...</option>
+                        {% for escola in escolas %}
+                        <option value="{{ escola.id }}">{{ escola.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Criar Vinculo</button>
+            </form>
+
+            <hr style="margin:1.5rem 0; border:none; border-top:1px solid rgba(255,255,255,0.08);" />
+
+            <div class="card-title" style="margin-bottom:1rem;">Vinculos ativos</div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Usuario</th>
+                            <th>Perfil</th>
+                            <th>Escola</th>
+                            <th>Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for vinculo in vinculos %}
+                        <tr>
+                            <td>{{ vinculo.usuario_nome }}</td>
+                            <td>{{ role_label(vinculo.usuario_role) }}</td>
+                            <td>{{ vinculo.escola_nome }}</td>
+                            <td>
+                                <form method="POST"
+                                    action="{{ url_for('admin.deletar_vinculo_route', vinculo_id=vinculo.id) }}"
+                                    onsubmit="return confirm('Remover o vinculo deste usuario com a escola?')">
+                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-danger btn-sm">Remover</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="text-muted">Nenhum vinculo cadastrado.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="modal-usuario">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title">Novo Usuario</span>
+            <button class="modal-close" onclick="closeModal('modal-usuario')">x</button>
+        </div>
+        <form method="POST" action="{{ url_for('admin.criar_usuario_route') }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label class="form-label">Nome</label>
+                <input type="text" name="nome" class="form-control" required />
+            </div>
+            <div class="form-group">
+                <label class="form-label">E-mail</label>
+                <input type="email" name="email" class="form-control" required />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Senha inicial</label>
+                <input type="password" name="senha" class="form-control" minlength="8" required />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Perfil</label>
+                <select name="role" class="form-control">
+                    {% for role in role_options %}
+                    <option value="{{ role }}">{{ role_label(role) }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="flex gap-2 mt-2">
+                <button type="submit" class="btn btn-primary w-full">Criar Usuario</button>
+                <button type="button" class="btn btn-secondary" onclick="closeModal('modal-usuario')">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

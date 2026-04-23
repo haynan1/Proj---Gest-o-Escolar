@@ -1,76 +1,113 @@
 {% extends "base.html" %}
 
-{% block title %}EduSchedule — Início{% endblock %}
+{% block title %}EduSchedule - Inicio{% endblock %}
 
 {% block content %}
 <div class="container">
-
-    <!-- Hero -->
     <div class="hero">
-        <h1>Gerador de Horários Escolares</h1>
-        <p>Crie grades de horários automáticas, inteligentes e sem conflitos para sua escola.</p>
+        <h1>Gestao de escolas com acesso por perfil</h1>
+        <p>
+            {% if has_permission('manage_schools') %}
+            Administre escolas, horarios e vinculos com seguranca.
+            {% else %}
+            Acesse apenas as escolas vinculadas ao seu perfil.
+            {% endif %}
+        </p>
+        {% if has_permission('manage_schools') %}
         <button class="btn btn-primary btn-lg" onclick="openModal('modal-criar-escola')">
             + Nova Escola
         </button>
+        {% endif %}
     </div>
 
-    <!-- Stats -->
     {% if escolas %}
     <div class="stats-grid">
         <div class="stat-card">
             <div class="stat-value">{{ escolas|length }}</div>
-            <div class="stat-label">Escola(s) cadastrada(s)</div>
+            <div class="stat-label">
+                {% if has_permission('manage_schools') %}Escolas gerenciadas{% else %}Escolas vinculadas{% endif %}
+            </div>
         </div>
     </div>
     {% endif %}
 
-    <!-- Escolas -->
     {% if escolas %}
-    <h2 class="mb-2" style="font-size:1.1rem; color:var(--text-muted); font-weight:500;">Suas Escolas</h2>
+    <h2 class="mb-2" style="font-size:1.1rem; color:var(--text-muted); font-weight:500;">
+        {% if has_permission('manage_schools') %}Escolas do sistema{% else %}Suas escolas{% endif %}
+    </h2>
     <div class="escolas-grid">
         {% for escola in escolas %}
         <div class="escola-card">
-            <div style="font-size:2rem; margin-bottom:0.5rem;">🏫</div>
+            <div class="escola-card-icon" aria-hidden="true">
+                <svg viewBox="0 0 64 64" fill="none">
+                    <path d="M10 24 32 12l22 12" class="school-stroke" stroke-width="4" stroke-linecap="round"
+                        stroke-linejoin="round" />
+                    <path d="M16 26h32v24H16z" class="school-fill" />
+                    <path d="M24 50V38h16v12" class="school-door" stroke-width="4" stroke-linecap="round"
+                        stroke-linejoin="round" />
+                    <path d="M22 34h4M38 34h4M22 42h4M38 42h4" class="school-stroke" stroke-width="4"
+                        stroke-linecap="round" />
+                </svg>
+            </div>
             <h3>{{ escola.nome }}</h3>
-            <p class="text-muted text-sm">Criada em {{ escola.criado_em_formatado or '—' }}</p>
+            <p class="text-muted text-sm">Criada em {{ escola.criado_em_formatado or '-' }}</p>
+            {% if escola.owner_nome %}
+            <p class="text-muted text-sm">Responsavel: {{ escola.owner_nome }}</p>
+            {% endif %}
             <div class="actions">
                 <a href="{{ url_for('dashboard.dashboard', escola_id=escola.id) }}" class="btn btn-primary btn-sm">
                     Abrir Dashboard
                 </a>
                 <a href="{{ url_for('dashboard.horarios', escola_id=escola.id) }}" class="btn btn-secondary btn-sm">
-                    Ver Horários
+                    Ver Horarios
                 </a>
+                {% if has_permission('manage_schools') %}
                 <form method="POST" action="{{ url_for('escola.deletar', escola_id=escola.id) }}"
-                    onsubmit="return confirm('Remover escola {{ escola.nome }}? Todos os dados serão perdidos.')">
+                    onsubmit="return confirm('Remover escola {{ escola.nome }}? Todos os dados serao perdidos.')">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-danger btn-sm btn-icon" title="Remover">🗑</button>
+                    <button type="submit" class="btn btn-danger btn-sm btn-icon" title="Remover">X</button>
                 </form>
+                {% endif %}
             </div>
         </div>
         {% endfor %}
     </div>
     {% else %}
     <div class="card" style="text-align:center; padding:3rem;">
-        <div style="font-size:3rem; margin-bottom:1rem;">🏫</div>
+        <div class="escola-empty-icon" aria-hidden="true">
+            <svg viewBox="0 0 64 64" fill="none">
+                <path d="M10 24 32 12l22 12" class="school-stroke" stroke-width="4" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                <path d="M16 26h32v24H16z" class="school-fill" />
+                <path d="M24 50V38h16v12" class="school-door" stroke-width="4" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                <path d="M22 34h4M38 34h4M22 42h4M38 42h4" class="school-stroke" stroke-width="4"
+                    stroke-linecap="round" />
+            </svg>
+        </div>
+        {% if has_permission('manage_schools') %}
         <p class="text-muted">Nenhuma escola cadastrada ainda.</p>
-        <p class="text-muted text-sm mt-1">Clique em "Nova Escola" para começar.</p>
+        <p class="text-muted text-sm mt-1">Clique em "Nova Escola" para comecar.</p>
+        {% else %}
+        <p class="text-muted">Voce ainda nao possui vinculos com escolas.</p>
+        <p class="text-muted text-sm mt-1">Solicite ao administrador o vinculo correto para acessar o sistema.</p>
+        {% endif %}
     </div>
     {% endif %}
-
 </div>
 
-<!-- Modal: Criar Escola -->
+{% if has_permission('manage_schools') %}
 <div class="modal-overlay" id="modal-criar-escola">
     <div class="modal">
         <div class="modal-header">
-            <span class="modal-title">🏫 Nova Escola</span>
-            <button class="modal-close" onclick="closeModal('modal-criar-escola')">✕</button>
+            <span class="modal-title">Nova Escola</span>
+            <button class="modal-close" onclick="closeModal('modal-criar-escola')">x</button>
         </div>
         <form method="POST" action="{{ url_for('escola.criar') }}">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label class="form-label">Nome da Escola</label>
-                <input type="text" name="nome" class="form-control" placeholder="Ex: Escola Estadual João Silva"
+                <input type="text" name="nome" class="form-control" placeholder="Ex: Escola Estadual Joao Silva"
                     required autofocus />
             </div>
             <div class="flex gap-2 mt-2">
@@ -81,4 +118,5 @@
         </form>
     </div>
 </div>
+{% endif %}
 {% endblock %}

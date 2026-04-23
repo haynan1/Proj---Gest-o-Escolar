@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from auth import csrf_protect
 from database.schema import create_tables
 from routes.auth_routes import auth_bp
+from routes.admin_routes import admin_bp
 from routes.escola_routes import escola_bp
 from routes.dashboard_routes import dashboard_bp
 
@@ -53,6 +54,7 @@ app.before_request(csrf_protect)
 
 # Registra blueprints
 app.register_blueprint(auth_bp)
+app.register_blueprint(admin_bp)
 app.register_blueprint(escola_bp)
 app.register_blueprint(dashboard_bp)
 create_tables()

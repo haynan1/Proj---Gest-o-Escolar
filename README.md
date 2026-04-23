@@ -7,6 +7,8 @@ Aplicacao Flask para gerenciamento de escolas, turmas, disciplinas, professores 
 - cadastro e login de usuarios
 - verificacao de e-mail
 - recuperacao de senha por link
+- perfis de acesso: administrador, coordenador e funcionario
+- vinculos de usuarios com escolas
 - cadastro de escolas, turmas, disciplinas e professores
 - geracao de horarios escolares
 
@@ -124,6 +126,23 @@ O sistema possui:
 
 O usuario precisa confirmar o e-mail antes de entrar.
 
+## Perfis e vinculos
+
+O sistema agora trabalha com:
+
+- `administrador`: acesso total, inclusive gestao de usuarios, perfis, vinculos e escolas
+- `coordenador`: gerencia recursos e horarios apenas das escolas vinculadas
+- `funcionario`: acesso de consulta e exportacao apenas das escolas vinculadas
+
+Os vinculos sao armazenados na tabela `usuarios_escolas`.
+
+Regras praticas:
+
+- administradores podem acessar a tela `Usuarios`
+- coordenadores e funcionarios so veem escolas com vinculo ativo
+- funcionarios nao podem criar, editar ou remover dados escolares
+- coordenadores podem editar dados e gerenciar horarios, mas nao usuarios globais
+
 ## E-mail com Gmail
 
 O projeto suporta envio real de e-mail com Gmail usando SMTP.
@@ -165,6 +184,7 @@ AUTH_BOOTSTRAP_ADMIN_PASSWORD=uma_senha_forte
 ```
 
 Se o e-mail ainda nao existir, o usuario sera criado automaticamente.
+Se ja existir, o perfil sera promovido para `administrador`.
 
 ## Publicacao em producao
 
@@ -187,7 +207,9 @@ APP_BASE_URL=https://app.seudominio.com
 - `src/app.py`: inicializacao da aplicacao
 - `src/database/connection.py`: conexao com banco e criacao automatica do schema
 - `src/database/schema.py`: criacao das tabelas
+- `src/access_control.py`: regras de perfil e permissao
 - `src/routes/auth_routes.py`: login, cadastro, verificacao e recuperacao de senha
+- `src/routes/admin_routes.py`: gestao de usuarios e vinculos
 - `src/email_service.py`: envio de e-mails
 
 ## GitHub

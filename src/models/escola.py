@@ -1,4 +1,6 @@
+from access_control import user_has_permission
 from database.connection import get_connection
+from models.user_link import usuario_tem_vinculo
 
 
 def _serialize_escola(row):
@@ -14,49 +16,101 @@ def _serialize_escola(row):
 def criar_escola(user_id, nome):
     conn = get_connection()
     try:
-        conn.execute(
+        cursor = conn.execute(
             "INSERT INTO escolas (user_id, nome) VALUES (%s, %s)",
             (user_id, nome),
         )
+        escola_id = cursor.lastrowid
+        conn.execute(
+            """INSERT INTO usuarios_escolas (usuario_id, escola_id)
+               VALUES (%s, %s)""",
+            (user_id, escola_id),
+        )
         conn.commit()
         return True, "Escola criada com sucesso."
-    except Exception as e:
-        return False, str(e)
+    except Exception as exc:
+        conn.rollback()
+        return False, str(exc)
     finally:
         conn.close()
 
 
-def listar_escolas(user_id):
+def listar_escolas_para_usuario(user: dict):
     conn = get_connection()
-    escolas = conn.execute(
-        "SELECT * FROM escolas WHERE user_id = %s ORDER BY nome",
-        (user_id,),
-    ).fetchall()
-    conn.close()
-    return [_serialize_escola(e) for e in escolas]
+    try:
+        if user_has_permission(user, 'admin_access'):
+            escolas = conn.execute(
+                """SELECT e.*,
+                          dono.nome AS owner_nome
+                   FROM escolas e
+                   LEFT JOIN usuarios dono ON dono.id = e.user_id
+                   ORDER BY e.nome"""
+            ).fetchall()
+        else:
+            escolas = conn.execute(
+                """SELECT DISTINCT e.*,
+                                  dono.nome AS owner_nome
+                   FROM escolas e
+                   LEFT JOIN usuarios dono ON dono.id = e.user_id
+                   LEFT JOIN usuarios_escolas ue ON ue.escola_id = e.id
+                   WHERE e.user_id = %s OR ue.usuario_id = %s
+                   ORDER BY e.nome""",
+                (user['id'], user['id']),
+            ).fetchall()
+        return [_serialize_escola(e) for e in escolas]
+    finally:
+        conn.close()
 
 
-def buscar_escola(escola_id, user_id=None):
+def buscar_escola(escola_id, user=None):
     conn = get_connection()
-    if user_id is None:
-        escola = conn.execute("SELECT * FROM escolas WHERE id = %s", (escola_id,)).fetchone()
-    else:
+    try:
         escola = conn.execute(
-            "SELECT * FROM escolas WHERE id = %s AND user_id = %s",
-            (escola_id, user_id),
+            """SELECT e.*,
+                      dono.nome AS owner_nome
+               FROM escolas e
+               LEFT JOIN usuarios dono ON dono.id = e.user_id
+               WHERE e.id = %s""",
+            (escola_id,),
         ).fetchone()
-    conn.close()
-    return _serialize_escola(escola) if escola else None
+        escola = _serialize_escola(escola) if escola else None
+        if not escola:
+            return None
+        if not user or usuario_pode_acessar_escola(user, escola):
+            return escola
+        return None
+    finally:
+        conn.close()
 
 
-def deletar_escola(escola_id, user_id=None):
+def usuario_pode_acessar_escola(user: dict | None, escola: dict | None) -> bool:
+    if not user or not escola:
+        return False
+    if user_has_permission(user, 'admin_access'):
+        return True
+    if escola.get('user_id') == user.get('id'):
+        return True
+    return usuario_tem_vinculo(user['id'], escola['id'])
+
+
+def deletar_escola(escola_id):
     conn = get_connection()
-    if user_id is None:
+    try:
         conn.execute("DELETE FROM escolas WHERE id = %s", (escola_id,))
-    else:
-        conn.execute(
-            "DELETE FROM escolas WHERE id = %s AND user_id = %s",
-            (escola_id, user_id),
-        )
-    conn.commit()
-    conn.close()
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def listar_escolas():
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            """SELECT e.*, dono.nome AS owner_nome
+               FROM escolas e
+               LEFT JOIN usuarios dono ON dono.id = e.user_id
+               ORDER BY e.nome"""
+        ).fetchall()
+        return [_serialize_escola(row) for row in rows]
+    finally:
+        conn.close()

@@ -1,10 +1,7 @@
-/**
- * dragdrop.js — Drag and Drop para a grade de horários com verificação de conflitos em tempo real
- */
-
 let draggedCard = null;
 let draggedAulaId = null;
 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
 
 async function destacarConflitos(profId) {
     if (!profId) return;
@@ -14,47 +11,47 @@ async function destacarConflitos(profId) {
         const resp = await fetch(`/escola/${escolaId}/professor/${profId}/ocupacao`);
         const ocupacao = await resp.json();
 
-        // Limpa destaques anteriores
-        document.querySelectorAll('.grade-cell').forEach(c => {
-            c.classList.remove('conflict-busy');
-            const label = c.querySelector('.conflict-label');
+        document.querySelectorAll('.grade-cell').forEach((cell) => {
+            cell.classList.remove('conflict-busy');
+            const label = cell.querySelector('.conflict-label');
             if (label) label.remove();
         });
 
-        // Aplica novos destaques
-        ocupacao.forEach(slot => {
+        ocupacao.forEach((slot) => {
             const cell = document.querySelector(`.grade-cell[data-dia="${slot.dia}"][data-periodo="${slot.periodo}"]`);
-            if (cell) {
-                // Se a ocupação for em OUTRA turma, destaca como conflito
-                const currentTurmaId = document.querySelector('.turma-tab.active')?.href.split('turma_id=')[1] ||
-                    document.querySelector('.turma-tabs a.active')?.href.split('turma_id=')[1];
+            if (!cell) return;
 
-                if (slot.turma_id != currentTurmaId) {
-                    cell.classList.add('conflict-busy');
-                    const label = document.createElement('div');
-                    label.className = 'conflict-label';
-                    label.textContent = `Ocupado: ${slot.turma_nome}`;
-                    cell.appendChild(label);
-                }
+            const currentTurmaId = document.querySelector('.turma-tabs a.active')?.href.split('turma_id=')[1];
+            if (slot.turma_id != currentTurmaId) {
+                cell.classList.add('conflict-busy');
+                const label = document.createElement('div');
+                label.className = 'conflict-label';
+                label.textContent = `Ocupado: ${slot.turma_nome}`;
+                cell.appendChild(label);
             }
         });
     } catch (err) {
-        console.error('Erro ao buscar ocupação:', err);
+        console.error('Erro ao buscar ocupacao:', err);
     }
 }
 
+
 function limparDestaques() {
-    document.querySelectorAll('.grade-cell').forEach(c => {
-        c.classList.remove('conflict-busy');
-        c.classList.remove('drag-over');
-        const label = c.querySelector('.conflict-label');
+    document.querySelectorAll('.grade-cell').forEach((cell) => {
+        cell.classList.remove('conflict-busy');
+        cell.classList.remove('drag-over');
+        const label = cell.querySelector('.conflict-label');
         if (label) label.remove();
     });
 }
 
+
 function initDragDrop() {
-    // Configura cards arrastáveis
-    document.querySelectorAll('.aula-card[data-aula-id]').forEach(card => {
+    if (document.body.dataset.canManageSchedule !== 'true') {
+        return;
+    }
+
+    document.querySelectorAll('.aula-card[data-aula-id]').forEach((card) => {
         card.setAttribute('draggable', 'true');
 
         card.addEventListener('dragstart', async (e) => {
@@ -64,9 +61,6 @@ function initDragDrop() {
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.setData('text/plain', draggedAulaId);
 
-            // Busca o ID do professor desta aula (está na legenda ou podemos pegar do card se adicionarmos)
-            // Para simplificar, vamos buscar a ocupação do professor associado a este card
-            // Precisamos que o card tenha o data-professor-id
             const profId = card.dataset.professorId;
             if (profId) {
                 destacarConflitos(profId);
@@ -81,8 +75,7 @@ function initDragDrop() {
         });
     });
 
-    // Configura células de destino
-    document.querySelectorAll('.grade-cell').forEach(cell => {
+    document.querySelectorAll('.grade-cell').forEach((cell) => {
         cell.addEventListener('dragover', (e) => {
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
@@ -104,13 +97,12 @@ function initDragDrop() {
             if (!aulaId || !novoDia || !novoPeriodo) return;
 
             if (cell.classList.contains('conflict-busy')) {
-                showToast('Esse professor já possui aula nesse horário.', 'error');
+                showToast('Esse professor ja possui aula nesse horario.', 'error');
                 return;
             }
 
-            // Verifica se célula já tem aula (conflito de turma)
             if (cell.querySelector('.aula-card') && cell.querySelector('.aula-card').dataset.aulaId !== aulaId) {
-                showToast('Essa turma já possui outra aula nesse horário.', 'error');
+                showToast('Essa turma ja possui outra aula nesse horario.', 'error');
                 return;
             }
 
@@ -126,13 +118,11 @@ function initDragDrop() {
                         'Content-Type': 'application/json',
                         'X-CSRF-Token': csrfToken,
                     },
-                    body: JSON.stringify({ aula_id: parseInt(aulaId), dia: novoDia, periodo: parseInt(novoPeriodo) })
+                    body: JSON.stringify({ aula_id: parseInt(aulaId), dia: novoDia, periodo: parseInt(novoPeriodo) }),
                 });
 
                 const data = await resp.json();
-
                 if (resp.ok && data.status === 'ok') {
-                    // Move o card visualmente
                     if (draggedCard) {
                         const oldCell = draggedCard.closest('.grade-cell');
                         cell.appendChild(draggedCard);
@@ -141,18 +131,19 @@ function initDragDrop() {
                             oldCell.classList.add('empty');
                         }
                     }
-                    showToast('✓ Aula movida com sucesso!', 'success');
+                    showToast('Aula movida com sucesso!', 'success');
                 } else {
                     const message = data?.error?.message || data.msg || 'Tente novamente';
-                    showToast('Erro ao mover aula: ' + message, 'error');
+                    showToast(`Erro ao mover aula: ${message}`, 'error');
                 }
             } catch (err) {
-                showToast('Erro de conexão ao mover aula.', 'error');
+                showToast('Erro de conexao ao mover aula.', 'error');
                 console.error(err);
             }
         });
     });
 }
+
 
 function showToast(msg, type = 'success') {
     const existing = document.getElementById('toast-container');
@@ -161,9 +152,9 @@ function showToast(msg, type = 'success') {
     const container = document.createElement('div');
     container.id = 'toast-container';
     container.style.cssText = `
-    position: fixed; bottom: 24px; right: 24px; z-index: 9999;
-    display: flex; flex-direction: column; gap: 8px;
-  `;
+        position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+        display: flex; flex-direction: column; gap: 8px;
+    `;
 
     const toast = document.createElement('div');
     const colors = {
@@ -174,21 +165,20 @@ function showToast(msg, type = 'success') {
     const c = colors[type] || colors.success;
 
     toast.style.cssText = `
-    background: ${c.bg}; border: 1px solid ${c.border}; color: ${c.color};
-    padding: 12px 20px; border-radius: 10px; font-size: 0.875rem; font-weight: 500;
-    backdrop-filter: blur(8px); box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-    animation: toastIn 0.3s ease;
-  `;
+        background: ${c.bg}; border: 1px solid ${c.border}; color: ${c.color};
+        padding: 12px 20px; border-radius: 10px; font-size: 0.875rem; font-weight: 500;
+        backdrop-filter: blur(8px); box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        animation: toastIn 0.3s ease;
+    `;
     toast.textContent = msg;
 
-    // Adiciona animação CSS
     if (!document.getElementById('toast-style')) {
         const style = document.createElement('style');
         style.id = 'toast-style';
         style.textContent = `
-      @keyframes toastIn { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: translateY(0); } }
-      @keyframes toastOut { from { opacity:1; } to { opacity:0; transform: translateY(10px); } }
-    `;
+            @keyframes toastIn { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: translateY(0); } }
+            @keyframes toastOut { from { opacity:1; } to { opacity:0; transform: translateY(10px); } }
+        `;
         document.head.appendChild(style);
     }
 
@@ -201,34 +191,35 @@ function showToast(msg, type = 'success') {
     }, 3000);
 }
 
-// Modal helpers
+
 function openModal(id) {
     const modal = document.getElementById(id);
     if (modal) modal.classList.add('active');
 }
+
 
 function closeModal(id) {
     const modal = document.getElementById(id);
     if (modal) modal.classList.remove('active');
 }
 
-// Fecha modal ao clicar fora
+
 document.addEventListener('click', (e) => {
     if (e.target.classList.contains('modal-overlay')) {
         e.target.classList.remove('active');
     }
 });
 
-// Fecha modal com Escape
+
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-        document.querySelectorAll('.modal-overlay.active').forEach(m => m.classList.remove('active'));
+        document.querySelectorAll('.modal-overlay.active').forEach((modal) => modal.classList.remove('active'));
     }
 });
 
-// Auto-dismiss flash messages
+
 document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('.alert').forEach(alert => {
+    document.querySelectorAll('.alert').forEach((alert) => {
         setTimeout(() => {
             alert.style.transition = 'opacity 0.5s';
             alert.style.opacity = '0';

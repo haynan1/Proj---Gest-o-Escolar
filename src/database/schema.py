@@ -3,6 +3,7 @@ import os
 
 from werkzeug.security import generate_password_hash
 
+from access_control import ROLE_ADMIN
 from database.connection import get_connection
 
 
@@ -15,6 +16,7 @@ TABLE_STATEMENTS = [
         nome VARCHAR(255) NOT NULL,
         email VARCHAR(255) NOT NULL UNIQUE,
         senha_hash VARCHAR(255) NOT NULL,
+        role VARCHAR(30) NOT NULL DEFAULT 'funcionario',
         email_verificado TINYINT(1) NOT NULL DEFAULT 0,
         email_verificado_em TIMESTAMP NULL DEFAULT NULL,
         token_version INT NOT NULL DEFAULT 0,
@@ -33,6 +35,19 @@ TABLE_STATEMENTS = [
         UNIQUE KEY uq_escolas_usuario_nome (user_id, nome),
         CONSTRAINT fk_escolas_usuario
             FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS usuarios_escolas (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        usuario_id INT NOT NULL,
+        escola_id INT NOT NULL,
+        criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_usuarios_escolas (usuario_id, escola_id),
+        CONSTRAINT fk_usuarios_escolas_usuario
+            FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+        CONSTRAINT fk_usuarios_escolas_escola
+            FOREIGN KEY (escola_id) REFERENCES escolas(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """,
     """
@@ -128,43 +143,15 @@ def _index_exists(cursor, table_name, index_name):
     return bool(row and row['total'])
 
 
-def _ensure_school_owner_column(cursor):
-    if not _column_exists(cursor, 'escolas', 'user_id'):
-        cursor.execute("ALTER TABLE escolas ADD COLUMN user_id INT NULL AFTER id")
-
-    if not _index_exists(cursor, 'escolas', 'idx_escolas_user_id'):
-        cursor.execute("CREATE INDEX idx_escolas_user_id ON escolas (user_id)")
-
-    if not _constraint_exists(cursor, 'escolas', 'fk_escolas_usuario'):
-        cursor.execute(
-            """ALTER TABLE escolas
-               ADD CONSTRAINT fk_escolas_usuario
-               FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE"""
-        )
-
-    if not _constraint_exists(cursor, 'escolas', 'uq_escolas_usuario_nome'):
-        row = cursor.execute(
-            """SELECT index_name
-               FROM information_schema.statistics
-               WHERE table_schema = DATABASE()
-                 AND table_name = 'escolas'
-                 AND column_name = 'nome'
-                 AND non_unique = 0
-                 AND index_name <> 'PRIMARY'
-               ORDER BY seq_in_index ASC
-               LIMIT 1"""
-        ).fetchone()
-        if row and row['index_name'] != 'uq_escolas_usuario_nome':
-            cursor.execute(f"ALTER TABLE escolas DROP INDEX {row['index_name']}")
-        cursor.execute(
-            "ALTER TABLE escolas ADD CONSTRAINT uq_escolas_usuario_nome UNIQUE (user_id, nome)"
-        )
-
-
 def _ensure_user_security_columns(cursor):
+    if not _column_exists(cursor, 'usuarios', 'role'):
+        cursor.execute(
+            "ALTER TABLE usuarios ADD COLUMN role VARCHAR(30) NOT NULL DEFAULT 'funcionario' AFTER senha_hash"
+        )
+
     if not _column_exists(cursor, 'usuarios', 'email_verificado'):
         cursor.execute(
-            "ALTER TABLE usuarios ADD COLUMN email_verificado TINYINT(1) NOT NULL DEFAULT 1 AFTER senha_hash"
+            "ALTER TABLE usuarios ADD COLUMN email_verificado TINYINT(1) NOT NULL DEFAULT 1 AFTER role"
         )
 
     if not _column_exists(cursor, 'usuarios', 'email_verificado_em'):
@@ -198,6 +185,60 @@ def _ensure_user_security_columns(cursor):
         )
 
 
+def _ensure_school_owner_column(cursor):
+    if not _column_exists(cursor, 'escolas', 'user_id'):
+        cursor.execute("ALTER TABLE escolas ADD COLUMN user_id INT NULL AFTER id")
+
+    if not _index_exists(cursor, 'escolas', 'idx_escolas_user_id'):
+        cursor.execute("CREATE INDEX idx_escolas_user_id ON escolas (user_id)")
+
+    if not _constraint_exists(cursor, 'escolas', 'fk_escolas_usuario'):
+        cursor.execute(
+            """ALTER TABLE escolas
+               ADD CONSTRAINT fk_escolas_usuario
+               FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE"""
+        )
+
+    if not _constraint_exists(cursor, 'escolas', 'uq_escolas_usuario_nome'):
+        row = cursor.execute(
+            """SELECT index_name
+               FROM information_schema.statistics
+               WHERE table_schema = DATABASE()
+                 AND table_name = 'escolas'
+                 AND column_name = 'nome'
+                 AND non_unique = 0
+                 AND index_name <> 'PRIMARY'
+               ORDER BY seq_in_index ASC
+               LIMIT 1"""
+        ).fetchone()
+        if row and row['index_name'] != 'uq_escolas_usuario_nome':
+            cursor.execute(f"ALTER TABLE escolas DROP INDEX {row['index_name']}")
+        cursor.execute(
+            "ALTER TABLE escolas ADD CONSTRAINT uq_escolas_usuario_nome UNIQUE (user_id, nome)"
+        )
+
+
+def _ensure_user_school_links(cursor):
+    if _constraint_exists(cursor, 'usuarios_escolas', 'fk_usuarios_escolas_usuario'):
+        return
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS usuarios_escolas (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            usuario_id INT NOT NULL,
+            escola_id INT NOT NULL,
+            criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_usuarios_escolas (usuario_id, escola_id),
+            CONSTRAINT fk_usuarios_escolas_usuario
+                FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+            CONSTRAINT fk_usuarios_escolas_escola
+                FOREIGN KEY (escola_id) REFERENCES escolas(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
+
+
 def _ensure_bootstrap_admin(cursor):
     email = os.getenv('AUTH_BOOTSTRAP_ADMIN_EMAIL', '').strip().lower()
     password = os.getenv('AUTH_BOOTSTRAP_ADMIN_PASSWORD', '').strip()
@@ -211,6 +252,10 @@ def _ensure_bootstrap_admin(cursor):
         (email,),
     ).fetchone()
     if existing:
+        cursor.execute(
+            "UPDATE usuarios SET role = %s WHERE id = %s",
+            (ROLE_ADMIN, existing['id']),
+        )
         return
 
     cursor.execute(
@@ -218,12 +263,13 @@ def _ensure_bootstrap_admin(cursor):
                nome,
                email,
                senha_hash,
+               role,
                email_verificado,
                email_verificado_em,
                token_version,
                tentativas_login_falhas
-           ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, %s, %s)""",
-        (name, email, generate_password_hash(password), True, 0, 0),
+           ) VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP, %s, %s)""",
+        (name, email, generate_password_hash(password), ROLE_ADMIN, True, 0, 0),
     )
 
 
@@ -238,7 +284,7 @@ def _assign_legacy_schools(cursor):
     if not owner_email:
         LOGGER.warning(
             'Existem escolas legadas sem owner definido. '
-            'Configure AUTH_ASSIGN_LEGACY_SCHOOLS_TO_EMAIL para vinculá-las com segurança.'
+            'Configure AUTH_ASSIGN_LEGACY_SCHOOLS_TO_EMAIL para vincula-las com seguranca.'
         )
         return
 
@@ -248,7 +294,7 @@ def _assign_legacy_schools(cursor):
     ).fetchone()
     if not owner:
         LOGGER.warning(
-            'AUTH_ASSIGN_LEGACY_SCHOOLS_TO_EMAIL=%s não corresponde a nenhum usuário.',
+            'AUTH_ASSIGN_LEGACY_SCHOOLS_TO_EMAIL=%s nao corresponde a nenhum usuario.',
             owner_email,
         )
         return
@@ -256,6 +302,15 @@ def _assign_legacy_schools(cursor):
     cursor.execute(
         "UPDATE escolas SET user_id = %s WHERE user_id IS NULL",
         (owner['id'],),
+    )
+
+
+def _backfill_school_links(cursor):
+    cursor.execute(
+        """INSERT IGNORE INTO usuarios_escolas (usuario_id, escola_id)
+           SELECT user_id, id
+           FROM escolas
+           WHERE user_id IS NOT NULL"""
     )
 
 
@@ -268,8 +323,10 @@ def create_tables():
             cursor.execute(statement)
         _ensure_user_security_columns(conn)
         _ensure_school_owner_column(conn)
+        _ensure_user_school_links(conn)
         _ensure_bootstrap_admin(conn)
         _assign_legacy_schools(conn)
+        _backfill_school_links(conn)
         conn.commit()
     finally:
         cursor.close()

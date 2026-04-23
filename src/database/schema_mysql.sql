@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
     nome VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
     senha_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(30) NOT NULL DEFAULT 'funcionario',
     email_verificado TINYINT(1) NOT NULL DEFAULT 0,
     email_verificado_em TIMESTAMP NULL DEFAULT NULL,
     token_version INT NOT NULL DEFAULT 0,
@@ -20,6 +21,18 @@ CREATE TABLE IF NOT EXISTS escolas (
     UNIQUE KEY uq_escolas_usuario_nome (user_id, nome),
     CONSTRAINT fk_escolas_usuario
         FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS usuarios_escolas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    usuario_id INT NOT NULL,
+    escola_id INT NOT NULL,
+    criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_usuarios_escolas (usuario_id, escola_id),
+    CONSTRAINT fk_usuarios_escolas_usuario
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    CONSTRAINT fk_usuarios_escolas_escola
+        FOREIGN KEY (escola_id) REFERENCES escolas(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS disciplinas (

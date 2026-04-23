@@ -3,6 +3,7 @@ from urllib.parse import urljoin
 
 from flask import Blueprint, current_app, flash, g, redirect, render_template, request, session, url_for
 
+from access_control import get_role_label, user_has_permission
 from auth import (
     SESSION_USER_ID_KEY,
     generate_csrf_token,
@@ -50,6 +51,8 @@ def inject_auth_helpers():
     return {
         'current_user': g.get('user'),
         'csrf_token': generate_csrf_token,
+        'has_permission': lambda permission: user_has_permission(g.get('user'), permission),
+        'role_label': lambda role=None: get_role_label(role or (g.get('user') or {}).get('role')),
     }
 
 

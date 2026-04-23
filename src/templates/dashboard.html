@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard — {{ escola.nome }}{% endblock %}
+{% block title %}Dashboard - {{ escola.nome }}{% endblock %}
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='horario-dashboard.css') }}" />
@@ -10,26 +10,32 @@
 {% block body_attrs %}data-escola-id="{{ escola.id }}"{% endblock %}
 
 {% block nav_links %}
-<a href="{{ url_for('escola.home') }}">← Início</a>
+<a href="{{ url_for('escola.home') }}">Inicio</a>
 <a href="{{ url_for('dashboard.dashboard', escola_id=escola.id) }}" class="active">Dashboard</a>
-<a href="{{ url_for('dashboard.horarios', escola_id=escola.id) }}">Horários</a>
+<a href="{{ url_for('dashboard.horarios', escola_id=escola.id) }}">Horarios</a>
 {% endblock %}
+
+{% set can_manage_resources = has_permission('manage_school_resources') %}
+{% set can_manage_schedule = has_permission('manage_schedule') %}
 
 {% block content %}
 <div class="container">
-
-    <!-- Header -->
     <div class="flex items-center justify-between mb-3 mt-2">
         <div>
-            <h1 class="dashboard-header-title">🏫 {{ escola.nome }}</h1>
-            <p class="text-muted text-sm mt-1">Gerencie disciplinas, professores e turmas</p>
+            <h1 class="dashboard-header-title">{{ escola.nome }}</h1>
+            <p class="text-muted text-sm mt-1">
+                {% if can_manage_resources %}
+                Gerencie disciplinas, professores e turmas.
+                {% else %}
+                Visualizacao liberada para o seu perfil.
+                {% endif %}
+            </p>
         </div>
         <a href="{{ url_for('dashboard.horarios', escola_id=escola.id) }}" class="btn btn-primary">
-            📅 Ver Horários
+            Ver Horarios
         </a>
     </div>
 
-    <!-- Stats -->
     <div class="stats-grid">
         <div class="stat-card">
             <div class="stat-value">{{ disciplinas|length }}</div>
@@ -45,19 +51,17 @@
         </div>
     </div>
 
-    <!-- Grid: Disciplinas + Professores + Turmas -->
     <div class="dashboard-grid">
-
-        <!-- ─── Disciplinas ─────────────────────────────────────────────────────── -->
         <div class="card">
             <div class="card-header">
                 <div class="card-title">
-                    <div class="icon icon-green">📚</div>
+                    <div class="icon icon-green">D</div>
                     Disciplinas
                 </div>
+                {% if can_manage_resources %}
                 <button class="btn btn-primary btn-sm" onclick="openModal('modal-disc')">+ Adicionar</button>
+                {% endif %}
             </div>
-
             {% if disciplinas %}
             <div class="table-wrap">
                 <table>
@@ -65,7 +69,7 @@
                         <tr>
                             <th>Nome</th>
                             <th>Cor</th>
-                            <th style="width:80px;">Ações</th>
+                            {% if can_manage_resources %}<th style="width:80px;">Acoes</th>{% endif %}
                         </tr>
                     </thead>
                     <tbody>
@@ -78,44 +82,44 @@
                                     {{ d.cor }}
                                 </span>
                             </td>
+                            {% if can_manage_resources %}
                             <td>
                                 <div class="flex gap-2">
                                     <button class="btn btn-secondary btn-sm btn-icon btn-edit-disc" title="Editar"
-                                        data-id="{{ d.id }}" data-nome="{{ d.nome }}" data-cor="{{ d.cor }}">✏️</button>
+                                        data-id="{{ d.id }}" data-nome="{{ d.nome }}" data-cor="{{ d.cor }}">E</button>
                                     <form method="POST"
                                         action="{{ url_for('dashboard.deletar_disc', escola_id=escola.id, disc_id=d.id) }}"
                                         onsubmit="return confirm('Remover disciplina {{ d.nome }}?')">
                                         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" class="btn btn-danger btn-sm btn-icon"
-                                            title="Remover">🗑</button>
+                                            title="Remover">X</button>
                                     </form>
                                 </div>
                             </td>
+                            {% endif %}
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
             {% else %}
-            <p class="text-muted text-sm dashboard-empty-msg">
-                Nenhuma disciplina cadastrada.
-            </p>
+            <p class="text-muted text-sm dashboard-empty-msg">Nenhuma disciplina cadastrada.</p>
             {% endif %}
         </div>
 
-        <!-- ─── Professores ─────────────────────────────────────────────────────── -->
         <div class="card">
             <div class="card-header">
                 <div class="card-title">
-                    <div class="icon icon-blue">👨‍🏫</div>
+                    <div class="icon icon-blue">P</div>
                     Professores
                 </div>
+                {% if can_manage_resources %}
                 <button class="btn btn-primary btn-sm" onclick="openModal('modal-prof')" {% if not disciplinas
                     %}disabled title="Cadastre disciplinas primeiro" {% endif %}>
                     + Adicionar
                 </button>
+                {% endif %}
             </div>
-
             {% if professores %}
             <div class="table-wrap">
                 <table>
@@ -123,8 +127,8 @@
                         <tr>
                             <th>Nome</th>
                             <th>Disciplina</th>
-                            <th>Máx/sem</th>
-                            <th style="width:80px;">Ações</th>
+                            <th>Max/sem</th>
+                            {% if can_manage_resources %}<th style="width:80px;">Acoes</th>{% endif %}
                         </tr>
                     </thead>
                     <tbody>
@@ -138,96 +142,95 @@
                                 </span>
                             </td>
                             <td>{{ p.max_aulas_semana }}</td>
+                            {% if can_manage_resources %}
                             <td>
                                 <div class="flex gap-2">
                                     <button class="btn btn-secondary btn-sm btn-icon btn-edit-prof" title="Editar"
                                         data-id="{{ p.id }}" data-nome="{{ p.nome }}"
                                         data-disc-id="{{ p.disciplina_id }}" data-max="{{ p.max_aulas_semana }}"
-                                        data-dias='{{ p.dias_lista | tojson }}'>✏️</button>
+                                        data-dias='{{ p.dias_lista | tojson }}'>E</button>
                                     <form method="POST"
                                         action="{{ url_for('dashboard.deletar_prof', escola_id=escola.id, prof_id=p.id) }}"
                                         onsubmit="return confirm('Remover professor {{ p.nome }}?')">
                                         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" class="btn btn-danger btn-sm btn-icon"
-                                            title="Remover">🗑</button>
+                                            title="Remover">X</button>
                                     </form>
                                 </div>
                             </td>
+                            {% endif %}
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
             {% else %}
-            <p class="text-muted text-sm dashboard-empty-msg">
-                Nenhum professor cadastrado.
-            </p>
+            <p class="text-muted text-sm dashboard-empty-msg">Nenhum professor cadastrado.</p>
             {% endif %}
         </div>
 
-        <!-- ─── Turmas ──────────────────────────────────────────────────────────── -->
         <div class="card">
             <div class="card-header">
                 <div class="card-title">
-                    <div class="icon icon-purple">🎓</div>
+                    <div class="icon icon-purple">T</div>
                     Turmas
                 </div>
+                {% if can_manage_resources %}
                 <button class="btn btn-primary btn-sm" onclick="openModal('modal-turma')">+ Adicionar</button>
+                {% endif %}
             </div>
-
             {% if turmas %}
             <div class="table-wrap">
                 <table>
                     <thead>
                         <tr>
                             <th>Nome</th>
-                            <th style="width:80px;">Ações</th>
+                            {% if can_manage_resources %}<th style="width:80px;">Acoes</th>{% endif %}
                         </tr>
                     </thead>
                     <tbody>
                         {% for t in turmas %}
                         <tr>
                             <td>{{ t.nome }}</td>
+                            {% if can_manage_resources %}
                             <td>
                                 <div class="flex gap-2">
                                     <button class="btn btn-secondary btn-sm btn-icon btn-edit-turma" title="Editar"
-                                        data-id="{{ t.id }}" data-nome="{{ t.nome }}">✏️</button>
+                                        data-id="{{ t.id }}" data-nome="{{ t.nome }}">E</button>
                                     <form method="POST"
                                         action="{{ url_for('dashboard.deletar_turm', escola_id=escola.id, turma_id=t.id) }}"
                                         onsubmit="return confirm('Remover turma {{ t.nome }}?')">
                                         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" class="btn btn-danger btn-sm btn-icon"
-                                            title="Remover">🗑</button>
+                                            title="Remover">X</button>
                                     </form>
                                 </div>
                             </td>
+                            {% endif %}
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
             {% else %}
-            <p class="text-muted text-sm dashboard-empty-msg">
-                Nenhuma turma cadastrada.
-            </p>
+            <p class="text-muted text-sm dashboard-empty-msg">Nenhuma turma cadastrada.</p>
             {% endif %}
         </div>
-
-    </div><!-- /grid -->
+    </div>
 </div>
 
-<!-- ─── Modal: Criar Disciplina ────────────────────────────────────────────── -->
+{% if can_manage_resources %}
 <div class="modal-overlay" id="modal-disc">
     <div class="modal">
         <div class="modal-header">
-            <span class="modal-title">📚 Nova Disciplina</span>
-            <button class="modal-close" onclick="closeModal('modal-disc')">✕</button>
+            <span class="modal-title">Nova Disciplina</span>
+            <button class="modal-close" onclick="closeModal('modal-disc')">x</button>
         </div>
         <form method="POST" action="{{ url_for('dashboard.criar_disc', escola_id=escola.id) }}">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label class="form-label">Nome</label>
-                <input type="text" name="nome" class="form-control" placeholder="Ex: Matemática" required />
+                <input type="text" name="nome" class="form-control" placeholder="Ex: Matematica" required />
             </div>
             <div class="form-group">
                 <label class="form-label">Cor</label>
@@ -244,12 +247,11 @@
     </div>
 </div>
 
-<!-- ─── Modal: Editar Disciplina ───────────────────────────────────────────── -->
 <div class="modal-overlay" id="modal-disc-edit">
     <div class="modal">
         <div class="modal-header">
-            <span class="modal-title">✏️ Editar Disciplina</span>
-            <button class="modal-close" onclick="closeModal('modal-disc-edit')">✕</button>
+            <span class="modal-title">Editar Disciplina</span>
+            <button class="modal-close" onclick="closeModal('modal-disc-edit')">x</button>
         </div>
         <form method="POST" id="form-disc-edit">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -273,12 +275,11 @@
     </div>
 </div>
 
-<!-- ─── Modal: Criar Professor ─────────────────────────────────────────────── -->
 <div class="modal-overlay" id="modal-prof">
     <div class="modal">
         <div class="modal-header">
-            <span class="modal-title">👨‍🏫 Novo Professor</span>
-            <button class="modal-close" onclick="closeModal('modal-prof')">✕</button>
+            <span class="modal-title">Novo Professor</span>
+            <button class="modal-close" onclick="closeModal('modal-prof')">x</button>
         </div>
         <form method="POST" action="{{ url_for('dashboard.criar_prof', escola_id=escola.id) }}">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -298,11 +299,11 @@
                 </div>
             </div>
             <div class="form-group">
-                <label class="form-label">Máx. aulas por semana</label>
+                <label class="form-label">Max. aulas por semana</label>
                 <input type="number" name="max_aulas_semana" class="form-control" value="10" min="1" max="25" />
             </div>
             <div class="form-group">
-                <label class="form-label">Dias disponíveis</label>
+                <label class="form-label">Dias disponiveis</label>
                 <div class="dias-grid">
                     {% for dia in dias_semana %}
                     <label class="dia-chip">
@@ -320,12 +321,11 @@
     </div>
 </div>
 
-<!-- ─── Modal: Editar Professor ────────────────────────────────────────────── -->
 <div class="modal-overlay" id="modal-prof-edit">
     <div class="modal">
         <div class="modal-header">
-            <span class="modal-title">✏️ Editar Professor</span>
-            <button class="modal-close" onclick="closeModal('modal-prof-edit')">✕</button>
+            <span class="modal-title">Editar Professor</span>
+            <button class="modal-close" onclick="closeModal('modal-prof-edit')">x</button>
         </div>
         <form method="POST" id="form-prof-edit">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -344,11 +344,11 @@
                 </div>
             </div>
             <div class="form-group">
-                <label class="form-label">Máx. aulas por semana</label>
+                <label class="form-label">Max. aulas por semana</label>
                 <input type="number" name="max_aulas_semana" id="edit-prof-max" class="form-control" min="1" max="25" />
             </div>
             <div class="form-group">
-                <label class="form-label">Dias disponíveis</label>
+                <label class="form-label">Dias disponiveis</label>
                 <div class="dias-grid" id="edit-prof-dias">
                     {% for dia in dias_semana %}
                     <label class="dia-chip">
@@ -367,18 +367,17 @@
     </div>
 </div>
 
-<!-- ─── Modal: Criar Turma ─────────────────────────────────────────────────── -->
 <div class="modal-overlay" id="modal-turma">
     <div class="modal">
         <div class="modal-header">
-            <span class="modal-title">🎓 Nova Turma</span>
-            <button class="modal-close" onclick="closeModal('modal-turma')">✕</button>
+            <span class="modal-title">Nova Turma</span>
+            <button class="modal-close" onclick="closeModal('modal-turma')">x</button>
         </div>
         <form method="POST" action="{{ url_for('dashboard.criar_turm', escola_id=escola.id) }}">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label class="form-label">Nome da Turma</label>
-                <input type="text" name="nome" class="form-control" placeholder="Ex: 6º Ano A" required />
+                <input type="text" name="nome" class="form-control" placeholder="Ex: 6 Ano A" required />
             </div>
             <div class="flex gap-2 mt-2">
                 <button type="submit" class="btn btn-primary w-full">Criar</button>
@@ -388,12 +387,11 @@
     </div>
 </div>
 
-<!-- ─── Modal: Editar Turma ────────────────────────────────────────────────── -->
 <div class="modal-overlay" id="modal-turma-edit">
     <div class="modal">
         <div class="modal-header">
-            <span class="modal-title">✏️ Editar Turma</span>
-            <button class="modal-close" onclick="closeModal('modal-turma-edit')">✕</button>
+            <span class="modal-title">Editar Turma</span>
+            <button class="modal-close" onclick="closeModal('modal-turma-edit')">x</button>
         </div>
         <form method="POST" id="form-turma-edit">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -409,8 +407,7 @@
         </form>
     </div>
 </div>
-
+{% endif %}
 {% endblock %}
 
-{% block scripts %}
-{% endblock %}
+{% block scripts %}{% endblock %}
