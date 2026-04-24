@@ -1,43 +1,284 @@
-import os
 import tempfile
-from reportlab.lib.pagesizes import A4, landscape
+from datetime import datetime
+from html import escape
+
 from reportlab.lib import colors
-from reportlab.lib.units import cm
-from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle,
-                                 Paragraph, Spacer, PageBreak)
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import cm
+from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
 
 DIAS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta']
 PERIODOS = [1, 2, 3, 4, 5]
+
+PAGE_BG = colors.HexColor('#f8fafc')
+INK = colors.HexColor('#0f172a')
+MUTED = colors.HexColor('#64748b')
+LINE = colors.HexColor('#cbd5e1')
+NAVY = colors.HexColor('#111827')
+NAVY_2 = colors.HexColor('#1e293b')
+GREEN = colors.HexColor('#22c55e')
+EMPTY_BG = colors.HexColor('#f1f5f9')
 
 
 def hex_to_color(hex_str):
     """Converte #rrggbb para reportlab Color."""
     try:
         h = hex_str.lstrip('#')
-        r = int(h[0:2], 16) / 255
-        g = int(h[2:4], 16) / 255
-        b = int(h[4:6], 16) / 255
-        return colors.Color(r, g, b)
+        return colors.Color(
+            int(h[0:2], 16) / 255,
+            int(h[2:4], 16) / 255,
+            int(h[4:6], 16) / 255,
+        )
     except Exception:
-        return colors.HexColor('#22c55e')
+        return GREEN
 
 
-def hex_to_light(hex_str, alpha=0.15):
-    """Retorna versão clara da cor para fundo."""
+def hex_to_light(hex_str, tint=0.86):
+    """Mistura a cor da disciplina com branco para um fundo suave de impressão."""
     try:
-        h = hex_str.lstrip('#')
-        r = int(h[0:2], 16) / 255
-        g = int(h[2:4], 16) / 255
-        b = int(h[4:6], 16) / 255
-        # Mistura com branco
-        r2 = r + (1 - r) * (1 - alpha)
-        g2 = g + (1 - g) * (1 - alpha)
-        b2 = b + (1 - b) * (1 - alpha)
-        return colors.Color(r2, g2, b2)
+        base = hex_to_color(hex_str)
+        return colors.Color(
+            base.red + (1 - base.red) * tint,
+            base.green + (1 - base.green) * tint,
+            base.blue + (1 - base.blue) * tint,
+        )
     except Exception:
         return colors.white
+
+
+def _hex_color(hex_str, fallback='#22c55e'):
+    try:
+        h = hex_str.strip()
+        if len(h) == 7 and h.startswith('#'):
+            int(h[1:], 16)
+            return h
+    except Exception:
+        pass
+    return fallback
+
+
+def _build_index(aulas):
+    idx = {}
+    for aula in aulas:
+        idx.setdefault(aula['turma_id'], {}).setdefault(aula['dia'], {})[aula['periodo']] = aula
+    return idx
+
+
+def _draw_page(canvas, doc):
+    width, height = landscape(A4)
+    canvas.saveState()
+    canvas.setFillColor(PAGE_BG)
+    canvas.rect(0, 0, width, height, fill=1, stroke=0)
+
+    canvas.setFillColor(NAVY)
+    canvas.rect(0, height - 0.35 * cm, width, 0.35 * cm, fill=1, stroke=0)
+
+    canvas.setFillColor(MUTED)
+    canvas.setFont('Helvetica', 7)
+    canvas.drawRightString(width - doc.rightMargin, 0.55 * cm, f'Página {doc.page}')
+    canvas.restoreState()
+
+
+def _styles():
+    base = getSampleStyleSheet()
+    return {
+        'eyebrow': ParagraphStyle(
+            'Eyebrow',
+            parent=base['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=8,
+            leading=10,
+            textColor=GREEN,
+            alignment=TA_LEFT,
+            spaceAfter=2,
+        ),
+        'title': ParagraphStyle(
+            'ScheduleTitle',
+            parent=base['Title'],
+            fontName='Helvetica-Bold',
+            fontSize=21,
+            leading=24,
+            textColor=INK,
+            alignment=TA_LEFT,
+            spaceAfter=2,
+        ),
+        'subtitle': ParagraphStyle(
+            'ScheduleSubtitle',
+            parent=base['Normal'],
+            fontSize=9,
+            leading=12,
+            textColor=MUTED,
+            alignment=TA_LEFT,
+        ),
+        'meta': ParagraphStyle(
+            'ScheduleMeta',
+            parent=base['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=8,
+            leading=10,
+            textColor=colors.white,
+            alignment=TA_CENTER,
+        ),
+        'cell': ParagraphStyle(
+            'ScheduleCell',
+            parent=base['Normal'],
+            fontSize=8.5,
+            leading=10,
+            textColor=INK,
+            alignment=TA_CENTER,
+        ),
+        'empty': ParagraphStyle(
+            'ScheduleEmpty',
+            parent=base['Normal'],
+            fontSize=12,
+            leading=12,
+            textColor=colors.HexColor('#94a3b8'),
+            alignment=TA_CENTER,
+        ),
+        'legend': ParagraphStyle(
+            'ScheduleLegend',
+            parent=base['Normal'],
+            fontSize=8,
+            leading=11,
+            textColor=INK,
+            alignment=TA_LEFT,
+        ),
+    }
+
+
+def _header(escola, turma, styles):
+    generated_at = datetime.now().strftime('%d/%m/%Y %H:%M')
+    title_block = [
+        Paragraph('GRADE DE HORÁRIOS', styles['eyebrow']),
+        Paragraph(escape(turma['nome']), styles['title']),
+        Paragraph(f"{escape(escola['nome'])}<br/>Atualizado em {generated_at}", styles['subtitle']),
+    ]
+    meta = Table(
+        [[Paragraph('Planax', styles['meta'])], [Paragraph('Gestão escolar', styles['meta'])]],
+        colWidths=[4.1 * cm],
+        rowHeights=[0.65 * cm, 0.55 * cm],
+    )
+    meta.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, 0), GREEN),
+        ('BACKGROUND', (0, 1), (0, 1), NAVY_2),
+        ('BOX', (0, 0), (-1, -1), 0.25, NAVY_2),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+
+    header = Table([[title_block, meta]], colWidths=[21.3 * cm, 4.1 * cm])
+    header.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    return header
+
+
+def _schedule_table(turma, idx, styles):
+    header_row = ['Dia / Período'] + [f'{periodo}º Período' for periodo in PERIODOS]
+    table_data = [header_row]
+
+    for dia in DIAS:
+        row = [dia]
+        for periodo in PERIODOS:
+            aula = idx.get(turma['id'], {}).get(dia, {}).get(periodo)
+            if aula:
+                cor = _hex_color(aula.get('disciplina_cor', '#22c55e'))
+                texto = (
+                    f"<font color='{cor}'><b>{escape(aula['disciplina_nome'])}</b></font>"
+                    f"<br/><font color='#475569'>{escape(aula['professor_nome'])}</font>"
+                )
+                row.append(Paragraph(texto, styles['cell']))
+            else:
+                row.append(Paragraph('—', styles['empty']))
+        table_data.append(row)
+
+    table = Table(
+        table_data,
+        colWidths=[3.2 * cm] + [4.45 * cm] * len(PERIODOS),
+        rowHeights=[1.05 * cm] + [2.15 * cm] * len(DIAS),
+        repeatRows=1,
+    )
+
+    table_style = [
+        ('BACKGROUND', (0, 0), (-1, 0), NAVY),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 8.5),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BACKGROUND', (0, 1), (0, -1), colors.HexColor('#e2e8f0')),
+        ('TEXTCOLOR', (0, 1), (0, -1), INK),
+        ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 1), (0, -1), 8.5),
+        ('ALIGN', (0, 1), (0, -1), 'CENTER'),
+        ('BACKGROUND', (1, 1), (-1, -1), colors.white),
+        ('GRID', (0, 0), (-1, -1), 0.45, LINE),
+        ('BOX', (0, 0), (-1, -1), 0.8, NAVY),
+        ('LEFTPADDING', (0, 0), (-1, -1), 7),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 7),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]
+
+    for row_idx, dia in enumerate(DIAS, 1):
+        for col_idx, periodo in enumerate(PERIODOS, 1):
+            aula = idx.get(turma['id'], {}).get(dia, {}).get(periodo)
+            if aula:
+                table_style.append((
+                    'BACKGROUND',
+                    (col_idx, row_idx),
+                    (col_idx, row_idx),
+                    hex_to_light(aula.get('disciplina_cor', '#22c55e')),
+                ))
+            else:
+                table_style.append(('BACKGROUND', (col_idx, row_idx), (col_idx, row_idx), EMPTY_BG))
+
+    table.setStyle(TableStyle(table_style))
+    return table
+
+
+def _legend(turma, aulas, styles):
+    seen = set()
+    items = []
+    for aula in aulas:
+        if aula['turma_id'] != turma['id'] or aula['disciplina_id'] in seen:
+            continue
+        seen.add(aula['disciplina_id'])
+        cor = _hex_color(aula.get('disciplina_cor', '#22c55e'))
+        items.append(Paragraph(
+            f"<font color='{cor}'>■</font> <b>{escape(aula['disciplina_nome'])}</b><br/>"
+            f"<font color='#64748b'>{escape(aula['professor_nome'])}</font>",
+            styles['legend'],
+        ))
+
+    if not items:
+        return Paragraph('Nenhuma aula gerada para esta turma.', styles['subtitle'])
+
+    rows = []
+    for i in range(0, len(items), 3):
+        row = items[i:i + 3]
+        while len(row) < 3:
+            row.append('')
+        rows.append(row)
+
+    table = Table(rows, colWidths=[8.35 * cm, 8.35 * cm, 8.35 * cm])
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.white),
+        ('BOX', (0, 0), (-1, -1), 0.45, LINE),
+        ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#e2e8f0')),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+    ]))
+    return table
 
 
 def exportar_pdf(escola, aulas, turmas, disciplinas):
@@ -48,134 +289,26 @@ def exportar_pdf(escola, aulas, turmas, disciplinas):
     doc = SimpleDocTemplate(
         tmp.name,
         pagesize=landscape(A4),
-        rightMargin=1.5 * cm,
-        leftMargin=1.5 * cm,
-        topMargin=1.5 * cm,
-        bottomMargin=1.5 * cm,
+        rightMargin=1.0 * cm,
+        leftMargin=1.0 * cm,
+        topMargin=0.85 * cm,
+        bottomMargin=0.9 * cm,
     )
 
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        'Title', parent=styles['Title'],
-        fontSize=16, textColor=colors.HexColor('#22c55e'),
-        spaceAfter=4, fontName='Helvetica-Bold'
-    )
-    subtitle_style = ParagraphStyle(
-        'Subtitle', parent=styles['Normal'],
-        fontSize=10, textColor=colors.HexColor('#94a3b8'),
-        spaceAfter=12
-    )
-    cell_style = ParagraphStyle(
-        'Cell', parent=styles['Normal'],
-        fontSize=8, leading=10, alignment=TA_CENTER
-    )
-
-    # Cores de fundo
-    BG_DARK  = colors.HexColor('#0f172a')
-    BG_CARD  = colors.HexColor('#1e293b')
-    BG_ROW   = colors.HexColor('#273549')
-    TEXT_COL = colors.HexColor('#f1f5f9')
-    TEXT_MUT = colors.HexColor('#94a3b8')
-    GREEN    = colors.HexColor('#22c55e')
-
-    # Índice de aulas
-    idx = {}
-    for a in aulas:
-        tid = a['turma_id']
-        if tid not in idx:
-            idx[tid] = {}
-        dia = a['dia']
-        if dia not in idx[tid]:
-            idx[tid][dia] = {}
-        idx[tid][dia][a['periodo']] = a
-
+    styles = _styles()
+    idx = _build_index(aulas)
     story = []
 
-    for i, turma in enumerate(turmas):
-        if i > 0:
+    for index, turma in enumerate(turmas):
+        if index > 0:
             story.append(PageBreak())
 
-        story.append(Paragraph(f"Horário Escolar — {turma['nome']}", title_style))
-        story.append(Paragraph(escola['nome'], subtitle_style))
+        story.append(_header(escola, turma, styles))
+        story.append(Spacer(1, 0.4 * cm))
+        story.append(_schedule_table(turma, idx, styles))
+        story.append(Spacer(1, 0.35 * cm))
+        story.append(Paragraph('Legenda', styles['eyebrow']))
+        story.append(_legend(turma, aulas, styles))
 
-        # Monta tabela
-        header_row = ['Dia'] + [f'{p}º' for p in PERIODOS]
-        table_data = [header_row]
-
-        for dia in DIAS:
-            row = [dia]
-            for periodo in PERIODOS:
-                aula = idx.get(turma['id'], {}).get(dia, {}).get(periodo)
-                if aula:
-                    txt = f"<b>{aula['disciplina_nome']}</b><br/><font size='7' color='#94a3b8'>{aula['professor_nome']}</font>"
-                    row.append(Paragraph(txt, cell_style))
-                else:
-                    row.append('')
-            table_data.append(row)
-
-        col_widths = [3 * cm] + [4.5 * cm] * 5
-        t = Table(table_data, colWidths=col_widths, rowHeights=[1.2 * cm] + [2 * cm] * 5)
-
-        # Estilos da tabela
-        ts = [
-            # Cabeçalho
-            ('BACKGROUND', (0, 0), (-1, 0), BG_CARD),
-            ('TEXTCOLOR',  (0, 0), (-1, 0), TEXT_COL),
-            ('FONTNAME',   (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE',   (0, 0), (-1, 0), 9),
-            ('ALIGN',      (0, 0), (-1, 0), 'CENTER'),
-            ('VALIGN',     (0, 0), (-1, -1), 'MIDDLE'),
-
-            # Coluna de dias
-            ('BACKGROUND', (0, 1), (0, -1), BG_ROW),
-            ('TEXTCOLOR',  (0, 1), (0, -1), TEXT_MUT),
-            ('FONTNAME',   (0, 1), (0, -1), 'Helvetica-Bold'),
-            ('FONTSIZE',   (0, 1), (0, -1), 9),
-            ('ALIGN',      (0, 1), (0, -1), 'CENTER'),
-
-            # Células de aula
-            ('BACKGROUND', (1, 1), (-1, -1), BG_CARD),
-            ('ALIGN',      (1, 1), (-1, -1), 'CENTER'),
-
-            # Grade
-            ('GRID',       (0, 0), (-1, -1), 0.5, colors.HexColor('#334155')),
-            ('ROWBACKGROUNDS', (1, 1), (-1, -1), [BG_CARD, BG_ROW]),
-        ]
-
-        # Cores individuais por aula
-        for row_idx, dia in enumerate(DIAS, 1):
-            for col_idx, periodo in enumerate(PERIODOS, 1):
-                aula = idx.get(turma['id'], {}).get(dia, {}).get(periodo)
-                if aula:
-                    try:
-                        bg = hex_to_light(aula['disciplina_cor'], 0.85)
-                        ts.append(('BACKGROUND', (col_idx, row_idx), (col_idx, row_idx), bg))
-                    except Exception:
-                        pass
-
-        t.setStyle(TableStyle(ts))
-        story.append(t)
-
-        # Legenda
-        story.append(Spacer(1, 0.5 * cm))
-
-        seen = set()
-        leg_items = []
-        for a in aulas:
-            if a['turma_id'] == turma['id'] and a['disciplina_id'] not in seen:
-                seen.add(a['disciplina_id'])
-                cor = hex_to_color(a['disciplina_cor'])
-                leg_items.append(
-                    f"<font color='{a['disciplina_cor']}'>■</font> "
-                    f"<b>{a['disciplina_nome']}</b> — {a['professor_nome']}"
-                )
-
-        if leg_items:
-            legend_style = ParagraphStyle(
-                'Legend', parent=styles['Normal'],
-                fontSize=8, textColor=TEXT_COL, leading=14
-            )
-            story.append(Paragraph('<br/>'.join(leg_items), legend_style))
-
-    doc.build(story)
+    doc.build(story, onFirstPage=_draw_page, onLaterPages=_draw_page)
     return tmp.name
