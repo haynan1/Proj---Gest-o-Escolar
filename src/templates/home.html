@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 
-{% block title %}Planax - Inicio{% endblock %}
+{% block title %}Planax - Início{% endblock %}
 
 {% block content %}
 <div class="container">
     <div class="hero">
-        <h1>Gestao de escolas com acesso por perfil</h1>
+        <h1>Gestão de escolas com acesso por perfil</h1>
         <p>
             {% if has_permission('manage_schools') %}
-            Administre escolas, horarios e vinculos com seguranca.
+            Administre escolas, horários e vínculos com segurança.
             {% else %}
             Acesse apenas as escolas vinculadas ao seu perfil.
             {% endif %}
@@ -52,14 +52,14 @@
             <h3>{{ escola.nome }}</h3>
             <p class="text-muted text-sm">Criada em {{ escola.criado_em_formatado or '-' }}</p>
             {% if escola.owner_nome %}
-            <p class="text-muted text-sm">Responsavel: {{ escola.owner_nome }}</p>
+            <p class="text-muted text-sm">Responsável: {{ escola.owner_nome }}</p>
             {% endif %}
             <div class="actions">
                 <a href="{{ url_for('dashboard.dashboard', escola_id=escola.id) }}" class="btn btn-primary btn-sm">
                     Abrir Dashboard
                 </a>
                 <a href="{{ url_for('dashboard.horarios', escola_id=escola.id) }}" class="btn btn-secondary btn-sm">
-                    Ver Horarios
+                    Ver Horários
                 </a>
                 {% if has_permission('manage_schools') %}
                 <form method="POST" action="{{ url_for('escola.deletar', escola_id=escola.id) }}"
@@ -87,10 +87,10 @@
         </div>
         {% if has_permission('manage_schools') %}
         <p class="text-muted">Nenhuma escola cadastrada ainda.</p>
-        <p class="text-muted text-sm mt-1">Clique em "Nova Escola" para comecar.</p>
+        <p class="text-muted text-sm mt-1">Clique em "Nova Escola" para começar.</p>
         {% else %}
-        <p class="text-muted">Voce ainda nao possui vinculos com escolas.</p>
-        <p class="text-muted text-sm mt-1">Solicite ao administrador o vinculo correto para acessar o sistema.</p>
+        <p class="text-muted">Você ainda não possui vínculos com escolas.</p>
+        <p class="text-muted text-sm mt-1">Solicite ao administrador o vínculo correto para acessar o sistema.</p>
         {% endif %}
     </div>
     {% endif %}
@@ -107,7 +107,7 @@
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label class="form-label">Nome da Escola</label>
-                <input type="text" name="nome" class="form-control" placeholder="Ex: Escola Estadual Joao Silva"
+                <input type="text" name="nome" class="form-control" placeholder="Ex: Escola Estadual João Silva"
                     required autofocus />
             </div>
             <div class="flex gap-2 mt-2">

@@ -59,6 +59,9 @@ APP_BASE_URL=http://localhost:5000
 AUTH_BOOTSTRAP_ADMIN_NAME=Administrador
 AUTH_BOOTSTRAP_ADMIN_EMAIL=
 AUTH_BOOTSTRAP_ADMIN_PASSWORD=
+AUTH_TEST_USER_NAME=Teste
+AUTH_TEST_USER_EMAIL=teste@escola.com
+AUTH_TEST_USER_PASSWORD=Teste12345
 AUTH_ASSIGN_LEGACY_SCHOOLS_TO_EMAIL=
 
 SESSION_COOKIE_SECURE=0
@@ -185,6 +188,18 @@ AUTH_BOOTSTRAP_ADMIN_PASSWORD=uma_senha_forte
 
 Se o e-mail ainda nao existir, o usuario sera criado automaticamente.
 Se ja existir, o perfil sera promovido para `administrador`.
+
+## Usuario de teste fixo
+
+A aplicacao mantem um usuario de teste verificado para facilitar testes locais:
+
+```env
+AUTH_TEST_USER_NAME=Teste
+AUTH_TEST_USER_EMAIL=teste@escola.com
+AUTH_TEST_USER_PASSWORD=Teste12345
+```
+
+Se esse usuario for excluido, ele sera criado novamente na proxima inicializacao da aplicacao.
 
 ## Publicacao em producao
 

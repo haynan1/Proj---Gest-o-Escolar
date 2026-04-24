@@ -3,11 +3,15 @@ import os
 
 from werkzeug.security import generate_password_hash
 
-from access_control import ROLE_ADMIN
+from access_control import ROLE_ADMIN, ROLE_STAFF
 from database.connection import get_connection
 
 
 LOGGER = logging.getLogger(__name__)
+DEFAULT_TEST_USER_NAME = 'Teste'
+DEFAULT_TEST_USER_EMAIL = 'teste@escola.com'
+DEFAULT_TEST_USER_PASSWORD = 'Teste12345'
+LEGACY_TEST_USER_EMAILS = ('teste_review3@example.com',)
 
 TABLE_STATEMENTS = [
     """
@@ -279,6 +283,57 @@ def _ensure_bootstrap_admin(cursor):
     )
 
 
+def _ensure_system_test_user(cursor):
+    email = os.getenv('AUTH_TEST_USER_EMAIL', DEFAULT_TEST_USER_EMAIL).strip().lower()
+    password = os.getenv('AUTH_TEST_USER_PASSWORD', DEFAULT_TEST_USER_PASSWORD).strip()
+    name = os.getenv('AUTH_TEST_USER_NAME', DEFAULT_TEST_USER_NAME).strip() or DEFAULT_TEST_USER_NAME
+
+    if not email or not password:
+        return
+
+    existing = cursor.execute(
+        "SELECT id FROM usuarios WHERE email = %s",
+        (email,),
+    ).fetchone()
+    if not existing:
+        placeholders = ', '.join(['%s'] * len(LEGACY_TEST_USER_EMAILS))
+        existing = cursor.execute(
+            f"SELECT id FROM usuarios WHERE email IN ({placeholders}) ORDER BY id LIMIT 1",
+            LEGACY_TEST_USER_EMAILS,
+        ).fetchone()
+
+    if existing:
+        cursor.execute(
+            """UPDATE usuarios
+               SET nome = %s,
+                   email = %s,
+                   senha_hash = %s,
+                   role = %s,
+                   email_verificado = 1,
+                   email_verificado_em = COALESCE(email_verificado_em, CURRENT_TIMESTAMP),
+                   token_version = token_version + 1,
+                   tentativas_login_falhas = 0,
+                   bloqueado_ate = NULL
+               WHERE id = %s""",
+            (name, email, generate_password_hash(password), ROLE_STAFF, existing['id']),
+        )
+        return
+
+    cursor.execute(
+        """INSERT INTO usuarios (
+               nome,
+               email,
+               senha_hash,
+               role,
+               email_verificado,
+               email_verificado_em,
+               token_version,
+               tentativas_login_falhas
+           ) VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP, %s, %s)""",
+        (name, email, generate_password_hash(password), ROLE_STAFF, True, 0, 0),
+    )
+
+
 def _assign_legacy_schools(cursor):
     row = cursor.execute(
         "SELECT COUNT(*) AS total FROM escolas WHERE user_id IS NULL"
@@ -331,6 +386,7 @@ def create_tables():
         _ensure_school_owner_column(conn)
         _ensure_user_school_links(conn)
         _ensure_bootstrap_admin(conn)
+        _ensure_system_test_user(conn)
         _assign_legacy_schools(conn)
         _backfill_school_links(conn)
         conn.commit()

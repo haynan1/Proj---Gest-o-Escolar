@@ -57,6 +57,7 @@
 
     {% block content %}{% endblock %}
 
+    <script src="{{ url_for('static', filename='ui.js') }}"></script>
     <script src="{{ url_for('static', filename='cores.js') }}"></script>
     <script src="{{ url_for('static', filename='dragdrop.js') }}"></script>
     {% block scripts %}{% endblock %}

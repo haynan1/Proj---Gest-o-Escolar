@@ -10,9 +10,9 @@
 {% block body_attrs %}data-escola-id="{{ escola.id }}"{% endblock %}
 
 {% block nav_links %}
-<a href="{{ url_for('escola.home') }}">Inicio</a>
+<a href="{{ url_for('escola.home') }}">Início</a>
 <a href="{{ url_for('dashboard.dashboard', escola_id=escola.id) }}" class="active">Dashboard</a>
-<a href="{{ url_for('dashboard.horarios', escola_id=escola.id) }}">Horarios</a>
+<a href="{{ url_for('dashboard.horarios', escola_id=escola.id) }}">Horários</a>
 {% endblock %}
 
 {% set can_manage_resources = has_permission('manage_school_resources') %}
@@ -27,12 +27,12 @@
                 {% if can_manage_resources %}
                 Gerencie disciplinas, professores e turmas.
                 {% else %}
-                Visualizacao liberada para o seu perfil.
+                Visualização liberada para o seu perfil.
                 {% endif %}
             </p>
         </div>
         <a href="{{ url_for('dashboard.horarios', escola_id=escola.id) }}" class="btn btn-primary">
-            Ver Horarios
+            Ver Horários
         </a>
     </div>
 
@@ -69,7 +69,7 @@
                         <tr>
                             <th>Nome</th>
                             <th>Cor</th>
-                            {% if can_manage_resources %}<th style="width:80px;">Acoes</th>{% endif %}
+                            {% if can_manage_resources %}<th style="width:80px;">Ações</th>{% endif %}
                         </tr>
                     </thead>
                     <tbody>
@@ -128,7 +128,7 @@
                             <th>Nome</th>
                             <th>Disciplina</th>
                             <th>Max/sem</th>
-                            {% if can_manage_resources %}<th style="width:80px;">Acoes</th>{% endif %}
+                            {% if can_manage_resources %}<th style="width:80px;">Ações</th>{% endif %}
                         </tr>
                     </thead>
                     <tbody>
@@ -166,6 +166,9 @@
             </div>
             {% else %}
             <p class="text-muted text-sm dashboard-empty-msg">Nenhum professor cadastrado.</p>
+            {% if can_manage_resources and not disciplinas %}
+            <p class="text-muted text-sm dashboard-empty-msg mt-1">Cadastre uma disciplina antes de adicionar professores.</p>
+            {% endif %}
             {% endif %}
         </div>
 
@@ -185,7 +188,7 @@
                     <thead>
                         <tr>
                             <th>Nome</th>
-                            {% if can_manage_resources %}<th style="width:80px;">Acoes</th>{% endif %}
+                            {% if can_manage_resources %}<th style="width:80px;">Ações</th>{% endif %}
                         </tr>
                     </thead>
                     <tbody>
@@ -230,7 +233,7 @@
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label class="form-label">Nome</label>
-                <input type="text" name="nome" class="form-control" placeholder="Ex: Matematica" required />
+                <input type="text" name="nome" class="form-control" placeholder="Ex: Matemática" required />
             </div>
             <div class="form-group">
                 <label class="form-label">Cor</label>
@@ -303,7 +306,7 @@
                 <input type="number" name="max_aulas_semana" class="form-control" value="10" min="1" max="25" />
             </div>
             <div class="form-group">
-                <label class="form-label">Dias disponiveis</label>
+                <label class="form-label">Dias disponíveis</label>
                 <div class="dias-grid">
                     {% for dia in dias_semana %}
                     <label class="dia-chip">
@@ -348,7 +351,7 @@
                 <input type="number" name="max_aulas_semana" id="edit-prof-max" class="form-control" min="1" max="25" />
             </div>
             <div class="form-group">
-                <label class="form-label">Dias disponiveis</label>
+                <label class="form-label">Dias disponíveis</label>
                 <div class="dias-grid" id="edit-prof-dias">
                     {% for dia in dias_semana %}
                     <label class="dia-chip">
