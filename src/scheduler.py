@@ -55,7 +55,7 @@ def gerar_horario(escola_id, turma_id_especifica=None):
             disc_id = disc['id']
             profs_disponiveis = [
                 p for p in professores
-                if p['disciplina_id'] == disc_id and turma_id in p.get('turma_ids', [])
+                if disc_id in p.get('disciplina_ids', []) and turma_id in p.get('turma_ids', [])
             ]
             if not profs_disponiveis:
                 continue

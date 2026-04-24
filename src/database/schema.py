@@ -12,6 +12,7 @@ DEFAULT_TEST_USER_NAME = 'Teste'
 DEFAULT_TEST_USER_EMAIL = 'teste@escola.com'
 DEFAULT_TEST_USER_PASSWORD = 'Teste12345'
 LEGACY_TEST_USER_EMAILS = ('teste_review3@example.com',)
+DEFAULT_SCHOOL_DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta']
 
 TABLE_STATEMENTS = [
     """
@@ -76,6 +77,19 @@ TABLE_STATEMENTS = [
             FOREIGN KEY (escola_id) REFERENCES escolas(id) ON DELETE CASCADE,
         CONSTRAINT fk_professores_disciplina
             FOREIGN KEY (disciplina_id) REFERENCES disciplinas(id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS professores_disciplinas (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        professor_id INT NOT NULL,
+        disciplina_id INT NOT NULL,
+        criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_professores_disciplinas (professor_id, disciplina_id),
+        CONSTRAINT fk_professores_disciplinas_professor
+            FOREIGN KEY (professor_id) REFERENCES professores(id) ON DELETE CASCADE,
+        CONSTRAINT fk_professores_disciplinas_disciplina
+            FOREIGN KEY (disciplina_id) REFERENCES disciplinas(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """,
     """
@@ -270,6 +284,113 @@ def _backfill_professor_turma_links(cursor):
     )
 
 
+def _backfill_professor_disciplina_links(cursor):
+    cursor.execute(
+        """INSERT IGNORE INTO professores_disciplinas (professor_id, disciplina_id)
+           SELECT id, disciplina_id
+           FROM professores"""
+    )
+
+
+def _merge_duplicate_professors(conn):
+    duplicates = conn.execute(
+        """SELECT escola_id, LOWER(TRIM(nome)) AS nome_normalizado
+           FROM professores
+           GROUP BY escola_id, LOWER(TRIM(nome))
+           HAVING COUNT(*) > 1"""
+    ).fetchall()
+
+    for group in duplicates:
+        professores = conn.execute(
+            """SELECT *
+               FROM professores
+               WHERE escola_id = %s AND LOWER(TRIM(nome)) = %s
+               ORDER BY id""",
+            (group['escola_id'], group['nome_normalizado']),
+        ).fetchall()
+        if len(professores) < 2:
+            continue
+
+        principal = professores[0]
+        principal_id = principal['id']
+        dias = set(filter(None, (principal.get('dias_disponiveis') or '').split(',')))
+        max_aulas = int(principal.get('max_aulas_semana') or 0)
+
+        for duplicado in professores[1:]:
+            duplicado_id = duplicado['id']
+            conflito = conn.execute(
+                """SELECT COUNT(*) AS total
+                   FROM aulas a_dup
+                   JOIN aulas a_main
+                     ON a_main.professor_id = %s
+                    AND a_main.dia = a_dup.dia
+                    AND a_main.periodo = a_dup.periodo
+                   WHERE a_dup.professor_id = %s""",
+                (principal_id, duplicado_id),
+            ).fetchone()
+            if conflito and conflito['total'] > 0:
+                LOGGER.warning(
+                    'Professor duplicado %s nao foi mesclado por conflito de horarios.',
+                    duplicado.get('nome'),
+                )
+                continue
+
+            conn.execute(
+                """INSERT IGNORE INTO professores_disciplinas (professor_id, disciplina_id)
+                   SELECT %s, disciplina_id
+                   FROM professores_disciplinas
+                   WHERE professor_id = %s""",
+                (principal_id, duplicado_id),
+            )
+            conn.execute(
+                """INSERT IGNORE INTO professores_turmas (professor_id, turma_id)
+                   SELECT %s, turma_id
+                   FROM professores_turmas
+                   WHERE professor_id = %s""",
+                (principal_id, duplicado_id),
+            )
+            conn.execute(
+                "UPDATE aulas SET professor_id = %s WHERE professor_id = %s",
+                (principal_id, duplicado_id),
+            )
+            conn.execute(
+                "DELETE FROM professores WHERE id = %s",
+                (duplicado_id,),
+            )
+
+            dias.update(filter(None, (duplicado.get('dias_disponiveis') or '').split(',')))
+            max_aulas = max(max_aulas, int(duplicado.get('max_aulas_semana') or 0))
+
+        conn.execute(
+            """UPDATE professores
+               SET max_aulas_semana = %s,
+                   dias_disponiveis = %s
+               WHERE id = %s""",
+            (
+                max_aulas or principal.get('max_aulas_semana'),
+                ','.join(_sort_school_days(dias)),
+                principal_id,
+            ),
+        )
+
+
+def _sort_school_days(days):
+    order = {day: index for index, day in enumerate(DEFAULT_SCHOOL_DAYS)}
+    return sorted(days, key=lambda day: order.get(day, len(order)))
+
+
+def _normalize_professor_days(conn):
+    professores = conn.execute(
+        "SELECT id, dias_disponiveis FROM professores"
+    ).fetchall()
+    for professor in professores:
+        days = set(filter(None, (professor.get('dias_disponiveis') or '').split(',')))
+        conn.execute(
+            "UPDATE professores SET dias_disponiveis = %s WHERE id = %s",
+            (','.join(_sort_school_days(days)), professor['id']),
+        )
+
+
 def _ensure_bootstrap_admin(cursor):
     email = os.getenv('AUTH_BOOTSTRAP_ADMIN_EMAIL', '').strip().lower()
     password = os.getenv('AUTH_BOOTSTRAP_ADMIN_PASSWORD', '').strip()
@@ -414,7 +535,10 @@ def create_tables():
         _ensure_user_school_links(conn)
         _ensure_bootstrap_admin(conn)
         _ensure_system_test_user(conn)
+        _backfill_professor_disciplina_links(conn)
         _backfill_professor_turma_links(conn)
+        _merge_duplicate_professors(conn)
+        _normalize_professor_days(conn)
         _assign_legacy_schools(conn)
         _backfill_school_links(conn)
         conn.commit()

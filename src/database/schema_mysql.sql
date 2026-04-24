@@ -57,6 +57,18 @@ CREATE TABLE IF NOT EXISTS professores (
         FOREIGN KEY (disciplina_id) REFERENCES disciplinas(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS professores_disciplinas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    professor_id INT NOT NULL,
+    disciplina_id INT NOT NULL,
+    criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_professores_disciplinas (professor_id, disciplina_id),
+    CONSTRAINT fk_professores_disciplinas_professor
+        FOREIGN KEY (professor_id) REFERENCES professores(id) ON DELETE CASCADE,
+    CONSTRAINT fk_professores_disciplinas_disciplina
+        FOREIGN KEY (disciplina_id) REFERENCES disciplinas(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS turmas (
     id INT AUTO_INCREMENT PRIMARY KEY,
     escola_id INT NOT NULL,

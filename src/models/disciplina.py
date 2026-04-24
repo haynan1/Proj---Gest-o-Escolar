@@ -57,8 +57,9 @@ def deletar_disciplina(disciplina_id, escola_id):
     try:
         professores_vinculados = conn.execute(
             """SELECT COUNT(*) AS total
-               FROM professores
-               WHERE disciplina_id = %s AND escola_id = %s""",
+               FROM professores_disciplinas pd
+               JOIN professores p ON p.id = pd.professor_id
+               WHERE pd.disciplina_id = %s AND p.escola_id = %s""",
             (disciplina_id, escola_id),
         ).fetchone()
         if professores_vinculados and professores_vinculados['total'] > 0:

@@ -166,18 +166,18 @@ def criar_prof(escola_id):
         return failure
 
     nome = request.form.get('nome', '').strip()
-    disciplina_id = request.form.get('disciplina_id')
+    disciplina_ids = request.form.getlist('disciplina_ids')
     max_aulas = request.form.get('max_aulas_semana', 10)
     dias = request.form.getlist('dias_disponiveis')
     turma_ids = request.form.getlist('turma_ids')
-    if not nome or not disciplina_id:
-        flash('Nome e disciplina sao obrigatorios.', 'error')
+    if not nome or not disciplina_ids:
+        flash('Nome e pelo menos uma disciplina sao obrigatorios.', 'error')
     elif not dias:
         flash('Selecione pelo menos um dia disponivel.', 'error')
     elif not turma_ids:
         flash('Selecione pelo menos uma turma para vincular ao professor.', 'error')
     else:
-        sucesso, msg = criar_professor(escola['id'], nome, int(disciplina_id), int(max_aulas), dias, turma_ids)
+        sucesso, msg = criar_professor(escola['id'], nome, disciplina_ids, int(max_aulas), dias, turma_ids)
         flash(msg, 'success' if sucesso else 'error')
     return redirect(url_for('dashboard.dashboard', escola_id=escola_id))
 
@@ -190,15 +190,18 @@ def editar_prof(escola_id, prof_id):
         return failure
 
     nome = request.form.get('nome', '').strip()
-    disciplina_id = request.form.get('disciplina_id')
+    disciplina_ids = request.form.getlist('disciplina_ids')
     max_aulas = request.form.get('max_aulas_semana', 10)
     dias = request.form.getlist('dias_disponiveis')
     turma_ids = request.form.getlist('turma_ids')
-    if nome and disciplina_id and dias and turma_ids:
-        atualizar_professor(prof_id, escola['id'], nome, int(disciplina_id), int(max_aulas), dias, turma_ids)
-        flash('Professor atualizado.', 'success')
+    if nome and disciplina_ids and dias and turma_ids:
+        try:
+            atualizar_professor(prof_id, escola['id'], nome, disciplina_ids, int(max_aulas), dias, turma_ids)
+            flash('Professor atualizado.', 'success')
+        except ValueError as exc:
+            flash(str(exc), 'error')
     else:
-        flash('Preencha nome, disciplina, dias disponiveis e pelo menos uma turma.', 'error')
+        flash('Preencha nome, disciplinas, dias disponiveis e pelo menos uma turma.', 'error')
     return redirect(url_for('dashboard.dashboard', escola_id=escola_id))
 
 
