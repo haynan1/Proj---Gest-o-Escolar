@@ -115,6 +115,23 @@ TABLE_STATEMENTS = [
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """,
     """
+    CREATE TABLE IF NOT EXISTS professores_cargas (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        professor_id INT NOT NULL,
+        turma_id INT NOT NULL,
+        disciplina_id INT NOT NULL,
+        aulas_semana INT NOT NULL DEFAULT 1,
+        criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_professores_cargas (professor_id, turma_id, disciplina_id),
+        CONSTRAINT fk_professores_cargas_professor
+            FOREIGN KEY (professor_id) REFERENCES professores(id) ON DELETE CASCADE,
+        CONSTRAINT fk_professores_cargas_turma
+            FOREIGN KEY (turma_id) REFERENCES turmas(id) ON DELETE CASCADE,
+        CONSTRAINT fk_professores_cargas_disciplina
+            FOREIGN KEY (disciplina_id) REFERENCES disciplinas(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """,
+    """
     CREATE TABLE IF NOT EXISTS aulas (
         id INT AUTO_INCREMENT PRIMARY KEY,
         escola_id INT NOT NULL,

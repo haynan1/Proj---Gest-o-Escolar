@@ -72,6 +72,34 @@ def _send_temp_file(filepath, download_name):
     return send_file(filepath, as_attachment=True, download_name=download_name)
 
 
+def _parse_cargas_professor(form):
+    cargas = []
+    prefixo = 'aulas_carga_'
+    for nome_campo, valor in form.items():
+        if not nome_campo.startswith(prefixo):
+            continue
+
+        partes = nome_campo[len(prefixo):].split('_')
+        if len(partes) != 2:
+            continue
+
+        try:
+            aulas_semana = int(valor or 0)
+            turma_id = int(partes[0])
+            disciplina_id = int(partes[1])
+        except ValueError:
+            continue
+
+        if aulas_semana > 0:
+            cargas.append({
+                'turma_id': turma_id,
+                'disciplina_id': disciplina_id,
+                'aulas_semana': aulas_semana,
+            })
+
+    return cargas
+
+
 def _load_accessible_escola(escola_id):
     return buscar_escola(escola_id, user=g.user)
 
@@ -166,10 +194,15 @@ def criar_prof(escola_id):
         return failure
 
     nome = request.form.get('nome', '').strip()
-    disciplina_ids = request.form.getlist('disciplina_ids')
     max_aulas = request.form.get('max_aulas_semana', 10)
     dias = request.form.getlist('dias_disponiveis')
-    turma_ids = request.form.getlist('turma_ids')
+    cargas = _parse_cargas_professor(request.form)
+    disciplina_ids = sorted(set(request.form.getlist('disciplina_ids') + [
+        str(carga['disciplina_id']) for carga in cargas
+    ]))
+    turma_ids = sorted(set(request.form.getlist('turma_ids') + [
+        str(carga['turma_id']) for carga in cargas
+    ]))
     if not nome or not disciplina_ids:
         flash('Nome e pelo menos uma disciplina sao obrigatorios.', 'error')
     elif not dias:
@@ -177,7 +210,7 @@ def criar_prof(escola_id):
     elif not turma_ids:
         flash('Selecione pelo menos uma turma para vincular ao professor.', 'error')
     else:
-        sucesso, msg = criar_professor(escola['id'], nome, disciplina_ids, int(max_aulas), dias, turma_ids)
+        sucesso, msg = criar_professor(escola['id'], nome, disciplina_ids, int(max_aulas), dias, turma_ids, cargas)
         flash(msg, 'success' if sucesso else 'error')
     return redirect(url_for('dashboard.dashboard', escola_id=escola_id))
 
@@ -190,13 +223,18 @@ def editar_prof(escola_id, prof_id):
         return failure
 
     nome = request.form.get('nome', '').strip()
-    disciplina_ids = request.form.getlist('disciplina_ids')
     max_aulas = request.form.get('max_aulas_semana', 10)
     dias = request.form.getlist('dias_disponiveis')
-    turma_ids = request.form.getlist('turma_ids')
+    cargas = _parse_cargas_professor(request.form)
+    disciplina_ids = sorted(set(request.form.getlist('disciplina_ids') + [
+        str(carga['disciplina_id']) for carga in cargas
+    ]))
+    turma_ids = sorted(set(request.form.getlist('turma_ids') + [
+        str(carga['turma_id']) for carga in cargas
+    ]))
     if nome and disciplina_ids and dias and turma_ids:
         try:
-            atualizar_professor(prof_id, escola['id'], nome, disciplina_ids, int(max_aulas), dias, turma_ids)
+            atualizar_professor(prof_id, escola['id'], nome, disciplina_ids, int(max_aulas), dias, turma_ids, cargas)
             flash('Professor atualizado.', 'success')
         except ValueError as exc:
             flash(str(exc), 'error')

@@ -12,6 +12,77 @@ from models.disciplina import listar_disciplinas
 from models.aula import salvar_aulas
 
 
+def _demandas_detalhadas(professores, turmas, disciplinas):
+    turma_ids = {turma['id'] for turma in turmas}
+    disciplinas_por_id = {disciplina['id']: disciplina for disciplina in disciplinas}
+    demandas = []
+
+    for professor in professores:
+        for carga in professor.get('cargas_lista', []):
+            turma_id = carga.get('turma_id')
+            disciplina_id = carga.get('disciplina_id')
+            qtd = int(carga.get('aulas_semana') or 0)
+            if turma_id not in turma_ids or disciplina_id not in disciplinas_por_id or qtd <= 0:
+                continue
+
+            demandas.append({
+                'turma_id': turma_id,
+                'disciplina': disciplinas_por_id[disciplina_id],
+                'professor': professor,
+                'qtd': qtd,
+            })
+
+    random.shuffle(demandas)
+    return demandas
+
+
+def _alocar_demanda(grade, turma_id, disc, qtd, professores_disponiveis, tentativas_max):
+    disc_id = disc['id']
+    colocadas = 0
+    tentativas = 0
+
+    slots = [(d, p) for d in DIAS for p in PERIODOS]
+    random.shuffle(slots)
+
+    for (dia, periodo) in slots:
+        if colocadas >= qtd:
+            break
+        if tentativas > tentativas_max:
+            break
+        tentativas += 1
+
+        if verificar_conflito_turma(grade, turma_id, dia, periodo):
+            continue
+
+        if verificar_aulas_seguidas(grade, turma_id, disc_id, dia, periodo):
+            continue
+
+        profs_shuffled = professores_disponiveis.copy()
+        random.shuffle(profs_shuffled)
+
+        for prof in profs_shuffled:
+            if dia not in prof['dias_lista']:
+                continue
+
+            if verificar_conflito_professor(grade, prof['id'], dia, periodo):
+                continue
+
+            if contar_aulas_professor(grade, prof['id']) >= prof['max_aulas_semana']:
+                continue
+
+            grade[turma_id][(dia, periodo)] = {
+                'professor_id': prof['id'],
+                'disciplina_id': disc_id,
+                'professor_nome': prof['nome'],
+                'disciplina_nome': disc['nome'],
+                'disciplina_cor': disc['cor'],
+            }
+            colocadas += 1
+            break
+
+    return colocadas
+
+
 def gerar_horario(escola_id, turma_id_especifica=None):
     """
     Gera automaticamente a grade de horários para uma escola ou turma específica.
@@ -33,86 +104,50 @@ def gerar_horario(escola_id, turma_id_especifica=None):
     if not disciplinas:
         return False, "Cadastre pelo menos uma disciplina antes de gerar o horário.", 0
 
-    # grade[turma_id][(dia, periodo)] = {professor_id, disciplina_id, ...}
     grade = {t['id']: {} for t in turmas}
 
-    # Calcular quantas aulas por disciplina por turma
-    # Distribuição: total de slots / número de disciplinas
-    total_slots = len(DIAS) * len(PERIODOS)  # 25 por turma
+    total_slots = len(DIAS) * len(PERIODOS)
     n_disc = len(disciplinas)
     aulas_por_disc = max(1, total_slots // n_disc)
 
     aulas_geradas = []
     tentativas_max = 5000
+    demandas = _demandas_detalhadas(professores, turmas, disciplinas)
 
-    for turma in turmas:
-        turma_id = turma['id']
-        # Embaralha disciplinas para distribuição variada
-        discs_shuffled = disciplinas.copy()
-        random.shuffle(discs_shuffled)
+    if demandas:
+        for demanda in demandas:
+            _alocar_demanda(
+                grade,
+                demanda['turma_id'],
+                demanda['disciplina'],
+                demanda['qtd'],
+                [demanda['professor']],
+                tentativas_max,
+            )
+    else:
+        for turma in turmas:
+            turma_id = turma['id']
+            discs_shuffled = disciplinas.copy()
+            random.shuffle(discs_shuffled)
 
-        for disc in discs_shuffled:
-            disc_id = disc['id']
-            profs_disponiveis = [
-                p for p in professores
-                if disc_id in p.get('disciplina_ids', []) and turma_id in p.get('turma_ids', [])
-            ]
-            if not profs_disponiveis:
-                continue
-
-            # Quantas aulas desta disciplina nesta turma
-            qtd = aulas_por_disc
-            colocadas = 0
-            tentativas = 0
-
-            # Embaralha dias e períodos
-            slots = [(d, p) for d in DIAS for p in PERIODOS]
-            random.shuffle(slots)
-
-            for (dia, periodo) in slots:
-                if colocadas >= qtd:
-                    break
-                if tentativas > tentativas_max:
-                    break
-                tentativas += 1
-
-                # Verifica conflito de turma
-                if verificar_conflito_turma(grade, turma_id, dia, periodo):
+            for disc in discs_shuffled:
+                disc_id = disc['id']
+                profs_disponiveis = [
+                    p for p in professores
+                    if disc_id in p.get('disciplina_ids', []) and turma_id in p.get('turma_ids', [])
+                ]
+                if not profs_disponiveis:
                     continue
 
-                # Verifica aulas seguidas
-                if verificar_aulas_seguidas(grade, turma_id, disc_id, dia, periodo):
-                    continue
+                _alocar_demanda(
+                    grade,
+                    turma_id,
+                    disc,
+                    aulas_por_disc,
+                    profs_disponiveis,
+                    tentativas_max,
+                )
 
-                # Tenta alocar um professor disponível
-                profs_shuffled = profs_disponiveis.copy()
-                random.shuffle(profs_shuffled)
-
-                for prof in profs_shuffled:
-                    # Verifica dia disponível
-                    if dia not in prof['dias_lista']:
-                        continue
-
-                    # Verifica conflito de professor
-                    if verificar_conflito_professor(grade, prof['id'], dia, periodo):
-                        continue
-
-                    # Verifica limite semanal
-                    if contar_aulas_professor(grade, prof['id']) >= prof['max_aulas_semana']:
-                        continue
-
-                    # Aloca a aula
-                    grade[turma_id][(dia, periodo)] = {
-                        'professor_id': prof['id'],
-                        'disciplina_id': disc_id,
-                        'professor_nome': prof['nome'],
-                        'disciplina_nome': disc['nome'],
-                        'disciplina_cor': disc['cor'],
-                    }
-                    colocadas += 1
-                    break
-
-    # Converte grade para lista de aulas
     for turma_id, slots in grade.items():
         for (dia, periodo), aula in slots.items():
             aulas_geradas.append({

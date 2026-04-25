@@ -129,6 +129,7 @@
                             <th>Disciplinas</th>
                             <th>Turmas</th>
                             <th>Max/sem</th>
+                            <th>Carga por turma</th>
                             {% if can_manage_resources %}<th style="width:80px;">Ações</th>{% endif %}
                         </tr>
                     </thead>
@@ -148,6 +149,17 @@
                             </td>
                             <td>{{ p.turmas_nomes or '-' }}</td>
                             <td>{{ p.max_aulas_semana }}</td>
+                            <td>
+                                {% if p.cargas_lista %}
+                                <div class="carga-resumo">
+                                    {% for carga in p.cargas_lista %}
+                                    <span>{{ carga.turma_nome }} / {{ carga.disciplina_nome }}: {{ carga.aulas_semana }}</span>
+                                    {% endfor %}
+                                </div>
+                                {% else %}
+                                <span class="text-muted">Sem detalhamento</span>
+                                {% endif %}
+                            </td>
                             {% if can_manage_resources %}
                             <td>
                                 <div class="flex gap-2">
@@ -156,7 +168,8 @@
                                         data-disciplina-ids='{{ p.disciplina_ids | tojson }}'
                                         data-max="{{ p.max_aulas_semana }}"
                                         data-dias='{{ p.dias_lista | tojson }}'
-                                        data-turmas='{{ p.turma_ids | tojson }}'>E</button>
+                                        data-turmas='{{ p.turma_ids | tojson }}'
+                                        data-cargas='{{ p.cargas_mapa | tojson }}'>E</button>
                                     <form method="POST"
                                         action="{{ url_for('dashboard.deletar_prof', escola_id=escola.id, prof_id=p.id) }}"
                                         onsubmit="return confirm('Remover professor {{ p.nome }}?')">
@@ -330,6 +343,41 @@
                 <input type="number" name="max_aulas_semana" class="form-control" value="10" min="1" max="25" />
             </div>
             <div class="form-group">
+                <label class="form-label">Aulas por turma e disciplina</label>
+                <div class="carga-grid">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Turma</th>
+                                <th>Disciplina</th>
+                                <th>Aulas/sem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for turma in turmas %}
+                            {% for d in disciplinas %}
+                            <tr class="carga-row" data-turma-id="{{ turma.id }}" data-disciplina-id="{{ d.id }}">
+                                <td>{{ turma.nome }}</td>
+                                <td>{{ d.nome }}</td>
+                                <td>
+                                    <input type="number"
+                                        name="aulas_carga_{{ turma.id }}_{{ d.id }}"
+                                        class="form-control carga-input"
+                                        value="0"
+                                        min="0"
+                                        max="25"
+                                        data-turma-id="{{ turma.id }}"
+                                        data-disciplina-id="{{ d.id }}" />
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <p class="text-muted text-sm mt-1">Preencha apenas as combinações que este professor realmente ministra.</p>
+            </div>
+            <div class="form-group">
                 <label class="form-label">Dias disponíveis</label>
                 <div class="dias-grid">
                     {% for dia in dias_semana %}
@@ -387,6 +435,41 @@
             <div class="form-group">
                 <label class="form-label">Max. aulas por semana</label>
                 <input type="number" name="max_aulas_semana" id="edit-prof-max" class="form-control" min="1" max="25" />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Aulas por turma e disciplina</label>
+                <div class="carga-grid">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Turma</th>
+                                <th>Disciplina</th>
+                                <th>Aulas/sem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for turma in turmas %}
+                            {% for d in disciplinas %}
+                            <tr class="carga-row edit-carga-row" data-turma-id="{{ turma.id }}" data-disciplina-id="{{ d.id }}">
+                                <td>{{ turma.nome }}</td>
+                                <td>{{ d.nome }}</td>
+                                <td>
+                                    <input type="number"
+                                        name="aulas_carga_{{ turma.id }}_{{ d.id }}"
+                                        class="form-control carga-input edit-carga-input"
+                                        value="0"
+                                        min="0"
+                                        max="25"
+                                        data-turma-id="{{ turma.id }}"
+                                        data-disciplina-id="{{ d.id }}" />
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <p class="text-muted text-sm mt-1">Use 0 para combinações que não se aplicam.</p>
             </div>
             <div class="form-group">
                 <label class="form-label">Dias disponíveis</label>

@@ -14,6 +14,34 @@ def _normalizar_ids(ids):
     return sorted(set(normalizados))
 
 
+def _normalizar_cargas(cargas):
+    normalizadas = []
+    vistos = set()
+    if not cargas:
+        return normalizadas
+
+    for carga in cargas:
+        try:
+            turma_id = int(carga.get('turma_id'))
+            disciplina_id = int(carga.get('disciplina_id'))
+            aulas_semana = int(carga.get('aulas_semana') or 0)
+        except (TypeError, ValueError, AttributeError):
+            continue
+
+        chave = (turma_id, disciplina_id)
+        if aulas_semana <= 0 or chave in vistos:
+            continue
+
+        vistos.add(chave)
+        normalizadas.append({
+            'turma_id': turma_id,
+            'disciplina_id': disciplina_id,
+            'aulas_semana': aulas_semana,
+        })
+
+    return normalizadas
+
+
 def _sincronizar_turmas_professor(conn, professor_id, escola_id, turma_ids):
     conn.execute(
         "DELETE FROM professores_turmas WHERE professor_id = %s",
@@ -43,6 +71,34 @@ def _sincronizar_disciplinas_professor(conn, professor_id, escola_id, disciplina
                FROM disciplinas
                WHERE id = %s AND escola_id = %s""",
             (professor_id, disciplina_id, escola_id),
+        )
+
+
+def _sincronizar_cargas_professor(conn, professor_id, escola_id, cargas):
+    conn.execute(
+        "DELETE FROM professores_cargas WHERE professor_id = %s",
+        (professor_id,),
+    )
+
+    for carga in _normalizar_cargas(cargas):
+        conn.execute(
+            """INSERT INTO professores_cargas (
+                   professor_id,
+                   turma_id,
+                   disciplina_id,
+                   aulas_semana
+               )
+               SELECT %s, t.id, d.id, %s
+               FROM turmas t
+               JOIN disciplinas d ON d.id = %s AND d.escola_id = t.escola_id
+               WHERE t.id = %s AND t.escola_id = %s""",
+            (
+                professor_id,
+                carga['aulas_semana'],
+                carga['disciplina_id'],
+                carga['turma_id'],
+                escola_id,
+            ),
         )
 
 
@@ -77,6 +133,55 @@ def _anexar_turmas(professores):
         professor['turmas_lista'] = turmas
         professor['turma_ids'] = [turma['id'] for turma in turmas]
         professor['turmas_nomes'] = ', '.join(turma['nome'] for turma in turmas)
+
+    return professores
+
+
+def _anexar_cargas(professores):
+    if not professores:
+        return professores
+
+    professor_ids = [p['id'] for p in professores]
+    placeholders = ', '.join(['%s'] * len(professor_ids))
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            f"""SELECT pc.professor_id,
+                       pc.turma_id,
+                       t.nome AS turma_nome,
+                       pc.disciplina_id,
+                       d.nome AS disciplina_nome,
+                       d.cor AS disciplina_cor,
+                       pc.aulas_semana
+                FROM professores_cargas pc
+                JOIN turmas t ON t.id = pc.turma_id
+                JOIN disciplinas d ON d.id = pc.disciplina_id
+                WHERE pc.professor_id IN ({placeholders})
+                ORDER BY t.nome, d.nome""",
+            tuple(professor_ids),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    cargas_por_professor = {prof_id: [] for prof_id in professor_ids}
+    for row in rows:
+        carga = {
+            'turma_id': row['turma_id'],
+            'turma_nome': row['turma_nome'],
+            'disciplina_id': row['disciplina_id'],
+            'disciplina_nome': row['disciplina_nome'],
+            'disciplina_cor': row['disciplina_cor'],
+            'aulas_semana': row['aulas_semana'],
+        }
+        cargas_por_professor[row['professor_id']].append(carga)
+
+    for professor in professores:
+        cargas = cargas_por_professor.get(professor['id'], [])
+        professor['cargas_lista'] = cargas
+        professor['cargas_mapa'] = {
+            f"{carga['turma_id']}:{carga['disciplina_id']}": carga['aulas_semana']
+            for carga in cargas
+        }
 
     return professores
 
@@ -125,10 +230,10 @@ def _anexar_disciplinas(professores):
 
 
 def _anexar_vinculos(professores):
-    return _anexar_turmas(_anexar_disciplinas(professores))
+    return _anexar_cargas(_anexar_turmas(_anexar_disciplinas(professores)))
 
 
-def criar_professor(escola_id, nome, disciplina_ids, max_aulas_semana, dias_disponiveis, turma_ids=None):
+def criar_professor(escola_id, nome, disciplina_ids, max_aulas_semana, dias_disponiveis, turma_ids=None, cargas=None):
     disciplina_ids = _normalizar_ids(disciplina_ids)
     if not disciplina_ids:
         return False, "Selecione pelo menos uma disciplina."
@@ -143,6 +248,7 @@ def criar_professor(escola_id, nome, disciplina_ids, max_aulas_semana, dias_disp
         )
         _sincronizar_disciplinas_professor(conn, cursor.lastrowid, escola_id, disciplina_ids)
         _sincronizar_turmas_professor(conn, cursor.lastrowid, escola_id, turma_ids)
+        _sincronizar_cargas_professor(conn, cursor.lastrowid, escola_id, cargas)
         conn.commit()
         return True, "Professor criado com sucesso."
     except Exception as e:
@@ -199,7 +305,7 @@ def buscar_professor(professor_id, escola_id=None):
     return None
 
 
-def atualizar_professor(professor_id, escola_id, nome, disciplina_ids, max_aulas_semana, dias_disponiveis, turma_ids=None):
+def atualizar_professor(professor_id, escola_id, nome, disciplina_ids, max_aulas_semana, dias_disponiveis, turma_ids=None, cargas=None):
     disciplina_ids = _normalizar_ids(disciplina_ids)
     if not disciplina_ids:
         raise ValueError("Selecione pelo menos uma disciplina.")
@@ -218,6 +324,7 @@ def atualizar_professor(professor_id, escola_id, nome, disciplina_ids, max_aulas
         )
         _sincronizar_disciplinas_professor(conn, professor_id, escola_id, disciplina_ids)
         _sincronizar_turmas_professor(conn, professor_id, escola_id, turma_ids)
+        _sincronizar_cargas_professor(conn, professor_id, escola_id, cargas)
         conn.commit()
     except Exception:
         conn.rollback()
